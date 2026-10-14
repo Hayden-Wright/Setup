@@ -4,8 +4,6 @@ Linux внутри Windows.
 
 ## Установка
 
-Нужен Windows 10 2004+ (сборка 19041) или Windows 11.
-
 PowerShell от администратора:
 
 ```powershell
