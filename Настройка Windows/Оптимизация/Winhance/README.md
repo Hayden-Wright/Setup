@@ -1,3 +1,0 @@
-# Winhance
-
-https://winhance.net/
