@@ -5,7 +5,6 @@
 - <img src="https://www.google.com/s2/favicons?domain=bcuninstaller.com&sz=64" width="16"> **[BCUninstaller](https://www.bcuninstaller.com/)** — удаление программ пачкой, вместе с остатками
 - <img src="https://www.google.com/s2/favicons?domain=bleachbit.org&sz=64" width="16"> **[BleachBit](https://www.bleachbit.org/download/windows)** — очистка мусора и следов
 - <img src="https://www.google.com/s2/favicons?domain=lockhunter.com&sz=64" width="16"> **[LockHunter](https://lockhunter.com/download.htm)** — разблокировка файлов, занятых другим процессом
-- <img src="https://www.google.com/s2/favicons?domain=flowlauncher.com&sz=64" width="16"> **[Flow Launcher](https://www.flowlauncher.com/)** — быстрый поиск файлов и запуск программ
 - <img src="https://raw.githubusercontent.com/Hayden-Wright/browser-backup-tool/main/build/icon.png" width="16"> **[BrowserBackup](https://github.com/Hayden-Wright/browser-backup-tool/releases/latest)** — бэкап и восстановление профилей браузеров
 
 ## Файлы
