@@ -1,0 +1,16 @@
+# Секреты и личное — никогда не коммитим
+.env
+*.key
+*.pem
+id_rsa*
+secrets/
+
+# Мусор Windows
+Thumbs.db
+desktop.ini
+*.lnk
+
+# Мусор редакторов
+.vscode/
+.idea/
+*.swp
