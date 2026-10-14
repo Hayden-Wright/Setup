@@ -12,7 +12,7 @@
 
 ## Файлы
 
-- <img src="https://www.google.com/s2/favicons?domain=voidtools.com&sz=64" width="16"> **[Everything](https://www.voidtools.com/)** — находит файл по имени сразу по всем дискам
+- <img src="https://www.google.com/s2/favicons?domain=voidtools.com&sz=64" width="16"> **[Everything](https://www.voidtools.com/)** — глубокий поиск файлов
 - <img src="https://www.google.com/s2/favicons?domain=diskanalyzer.com&sz=64" width="16"> **[WizTree](https://www.diskanalyzer.com/)** — что занимает место на диске
 - <img src="https://www.google.com/s2/favicons?domain=7-zip.org&sz=64" width="16"> **[7-Zip](https://www.7-zip.org/download.html)** — архиватор
 - <img src="https://raw.githubusercontent.com/M2Team/NanaZip/main/Assets/NanaZip.png" width="16"> **[NanaZip](https://github.com/M2Team/NanaZip/releases)** — архиватор, форк 7-Zip под Windows 11
