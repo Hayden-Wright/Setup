@@ -8,6 +8,6 @@ https://www.amd.com/en/support/download/drivers.html
 
 https://www.realtek.com/Download/List?cate_id=583&menu_id=297
 
-## Кастомное разрешение (AMD)
+## Настройка разрешения (AMD)
 
 ![](images/custom-resolution.jpg)
