@@ -3,16 +3,16 @@
 ## Система
 
 - <img src="https://www.google.com/s2/favicons?domain=bcuninstaller.com&sz=64" width="16"> **[BCUninstaller](https://www.bcuninstaller.com/)** — удаление программ пачкой, вместе с остатками
-- <img src="https://www.google.com/s2/favicons?domain=bleachbit.org&sz=64" width="16"> **[BleachBit](https://www.bleachbit.org/download/windows)** — очистка мусора и следов
+- <img src="https://www.google.com/s2/favicons?domain=bleachbit.org&sz=64" width="16"> **[BleachBit](https://www.bleachbit.org/download/windows)** — очистка мусора
 - <img src="https://www.google.com/s2/favicons?domain=lockhunter.com&sz=64" width="16"> **[LockHunter](https://lockhunter.com/download.htm)** — разблокировка файлов, занятых другим процессом
-- <img src="https://www.google.com/s2/favicons?domain=microsoft.com&sz=64" width="16"> **[Autoruns](https://learn.microsoft.com/en-us/sysinternals/downloads/autoruns)** — что запускается вместе с системой
+- <img src="https://www.google.com/s2/favicons?domain=microsoft.com&sz=64" width="16"> **[Autoruns](https://learn.microsoft.com/en-us/sysinternals/downloads/autoruns)** — автозагрузка
 - <img src="https://www.google.com/s2/favicons?domain=chuyu.me&sz=64" width="16"> **[Dism++](https://github.com/Chuyu-Team/Dism-Multi-language/releases)** — обслуживание и очистка системы
 - <img src="https://raw.githubusercontent.com/ventoy/Ventoy/master/ICON/logo_256.png" width="16"> **[Ventoy](https://www.ventoy.net/en/download.html)** — загрузочная флешка с несколькими ISO
 - <img src="https://raw.githubusercontent.com/Hayden-Wright/browser-backup-tool/main/build/icon.png" width="16"> **[BrowserBackup](https://github.com/Hayden-Wright/browser-backup-tool/releases/latest)** — бэкап и восстановление профилей браузеров
 
 ## Файлы
 
-- <img src="https://www.google.com/s2/favicons?domain=voidtools.com&sz=64" width="16"> **[Everything](https://www.voidtools.com/)** — мгновенный поиск файлов
+- <img src="https://www.google.com/s2/favicons?domain=voidtools.com&sz=64" width="16"> **[Everything](https://www.voidtools.com/)** — находит файл по имени сразу по всем дискам
 - <img src="https://www.google.com/s2/favicons?domain=diskanalyzer.com&sz=64" width="16"> **[WizTree](https://www.diskanalyzer.com/)** — что занимает место на диске
 - <img src="https://www.google.com/s2/favicons?domain=7-zip.org&sz=64" width="16"> **[7-Zip](https://www.7-zip.org/download.html)** — архиватор
 - <img src="https://raw.githubusercontent.com/M2Team/NanaZip/main/Assets/NanaZip.png" width="16"> **[NanaZip](https://github.com/M2Team/NanaZip/releases)** — архиватор, форк 7-Zip под Windows 11
