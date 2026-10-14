@@ -1,3 +1,1 @@
-# InputSwitch
-
-[InputSwitch.zip](./InputSwitch.zip)
+Отключает диалоговое окно завершения работы Windows.
