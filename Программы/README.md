@@ -14,6 +14,7 @@
 | Программа | Что делает | Скачать |
 | --- | --- | --- |
 | 7-Zip | Архиватор | [7-zip.org](https://www.7-zip.org/download.html) |
+| NanaZip | Архиватор, форк 7-Zip под Windows 11 | [github](https://github.com/M2Team/NanaZip/releases) |
 | PasteIntoFile | Вставка содержимого буфера обмена прямо в файл | [github](https://github.com/Eltos/PasteIntoFile/releases) |
 
 ## Медиа
