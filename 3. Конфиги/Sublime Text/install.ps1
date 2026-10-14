@@ -1,24 +1,25 @@
 #Requires -Version 5.1
 <#
-    Установка настроек Sublime Text из этого репозитория.
+    Установка настроек Sublime Text из репозитория setup.
 
-    Запуск (из папки "3. Конфиги/Sublime Text"):
-        powershell -ExecutionPolicy Bypass -File .\install.ps1
+    Одной командой (PowerShell):
+        irm "https://raw.githubusercontent.com/Hayden-Wright/setup/main/3.%20%D0%9A%D0%BE%D0%BD%D1%84%D0%B8%D0%B3%D0%B8/Sublime%20Text/install.ps1" | iex
 #>
 
 $ErrorActionPreference = 'Stop'
 
-$source     = Join-Path $PSScriptRoot 'Packages'
-$sublimeDir = Join-Path $env:APPDATA 'Sublime Text'
+$base = 'https://raw.githubusercontent.com/Hayden-Wright/setup/main/3.%20%D0%9A%D0%BE%D0%BD%D1%84%D0%B8%D0%B3%D0%B8/Sublime%20Text'
+
+$sublimeDir  = Join-Path $env:APPDATA 'Sublime Text'
 $packagesDir = Join-Path $sublimeDir 'Packages'
+$userDir     = Join-Path $packagesDir 'User'
+$themeDir    = Join-Path $packagesDir 'AuraTheme'
+$installedDir = Join-Path $sublimeDir 'Installed Packages'
 
-if (-not (Test-Path $source)) {
-    throw "Не найдена папка Packages рядом со скриптом: $source"
-}
-
+# --- Проверка, что Sublime Text стоит ------------------------------------
 if (-not (Test-Path $sublimeDir)) {
-    Write-Warning "Sublime Text не найден в $sublimeDir"
-    Write-Host  "Поставь его, запусти один раз, потом запусти этот скрипт снова."
+    Write-Warning "Sublime Text не найден: $sublimeDir"
+    Write-Host  "Поставь и запусти его один раз, потом повтори."
     Write-Host  "Скачать: https://www.sublimetext.com/download"
     exit 1
 }
@@ -26,42 +27,50 @@ if (-not (Test-Path $sublimeDir)) {
 # --- Бэкап текущих настроек ---------------------------------------------
 $stamp     = Get-Date -Format 'yyyy-MM-dd_HH-mm-ss'
 $backupDir = Join-Path $sublimeDir "Packages_backup_$stamp"
-
 New-Item -ItemType Directory -Path $backupDir -Force | Out-Null
+
 foreach ($item in @('User', 'AuraTheme')) {
     $src = Join-Path $packagesDir $item
     if (Test-Path $src) {
         Copy-Item $src -Destination $backupDir -Recurse -Force
-        Write-Host "Бэкап: $item -> $backupDir"
     }
 }
-Write-Host ""
+Write-Host "Бэкап: $backupDir"
 
-# --- Копирование конфигов ------------------------------------------------
-foreach ($item in @('User', 'AuraTheme')) {
-    $src = Join-Path $source $item
-    $dst = Join-Path $packagesDir $item
-    if (-not (Test-Path $src)) { continue }
+# --- Скачивание конфигов -------------------------------------------------
+New-Item -ItemType Directory -Path $userDir  -Force | Out-Null
+New-Item -ItemType Directory -Path $themeDir -Force | Out-Null
 
-    New-Item -ItemType Directory -Path $dst -Force | Out-Null
-    Copy-Item (Join-Path $src '*') -Destination $dst -Recurse -Force
-    Write-Host "Скопировано: $item"
+$files = @(
+    @{ Url = "$base/Packages/User/Preferences.sublime-settings";       Dst = $userDir  },
+    @{ Url = "$base/Packages/User/Markdown.sublime-settings";          Dst = $userDir  },
+    @{ Url = "$base/Packages/User/Package%20Control.sublime-settings"; Dst = $userDir  },
+    @{ Url = "$base/Packages/AuraTheme/aura-theme-soft.tmTheme";       Dst = $themeDir }
+)
+
+foreach ($f in $files) {
+    $name = [uri]::UnescapeDataString(($f.Url -split '/')[-1])
+    $dest = Join-Path $f.Dst $name
+    Invoke-WebRequest -Uri $f.Url -OutFile $dest -UseBasicParsing
+    Write-Host "Скачано: $name"
 }
 
-# --- Проверка темы -------------------------------------------------------
-$theme = Join-Path $packagesDir 'AuraTheme\aura-theme-soft.tmTheme'
-if (Test-Path $theme) {
-    Write-Host "Тема Aura на месте."
+# --- Package Control (ставит и доустанавливает пакеты сам) ----------------
+New-Item -ItemType Directory -Path $installedDir -Force | Out-Null
+$pcPath = Join-Path $installedDir 'Package Control.sublime-package'
+
+if (-not (Test-Path $pcPath)) {
+    Invoke-WebRequest -Uri 'https://download.sublimetext.com/Package%20Control.sublime-package' `
+        -OutFile $pcPath -UseBasicParsing
+    Write-Host "Package Control установлен."
 } else {
-    Write-Warning "Тема Aura не найдена: $theme"
+    Write-Host "Package Control уже стоит."
 }
 
 Write-Host @"
 
-Готово. Осталось:
-  1. Открыть Sublime Text.
-  2. Ctrl+Shift+P -> Install Package Control  (если ещё не установлен).
-  3. Ctrl+Shift+P -> Install Package -> MarkdownEditing, Markdown Extended.
+Готово. Открой Sublime Text — он сам доустановит MarkdownEditing и Markdown Extended
+(список лежит в Package Control.sublime-settings, Package Control его подхватит).
 
 Бэкап прежних настроек: $backupDir
 "@

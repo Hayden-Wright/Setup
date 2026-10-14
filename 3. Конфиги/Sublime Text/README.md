@@ -1,64 +1,25 @@
 # Sublime Text
 
-Настройки редактора: шрифт Consolas 10, перенос строк, тёмная тема Aura (soft),
-подсветка Markdown.
+Тема Aura (soft), шрифт Consolas 10, подсветка Markdown.
 
-## Что внутри
-
-| Путь | Что это |
-|---|---|
-| `Packages/User/Preferences.sublime-settings` | основные настройки: шрифт, тема, цветовая схема |
-| `Packages/User/Markdown.sublime-settings` | настройки Markdown |
-| `Packages/User/Package Control.sublime-settings` | список пакетов — по нему они доустановятся сами |
-| `Packages/AuraTheme/aura-theme-soft.tmTheme` | тема Aura, установлена вручную (не из Package Control) |
-
-Пакеты, которые подтянет Package Control: **MarkdownEditing**, **Markdown Extended**.
+![](screenshot.png)
 
 ## Как поставить
 
-Автоматически — из PowerShell:
+Одной командой в PowerShell:
 
 ```powershell
-.\install.ps1
+irm "https://raw.githubusercontent.com/Hayden-Wright/setup/main/3.%20%D0%9A%D0%BE%D0%BD%D1%84%D0%B8%D0%B3%D0%B8/Sublime%20Text/install.ps1" | iex
 ```
 
-Скрипт сделает бэкап текущих настроек, скопирует конфиги и тему, и напомнит
-доустановить пакеты.
+Скрипт скачает настройки и тему, сделает бэкап старых и поставит Package Control.
 
-Вручную:
+Потом открыть Sublime — он сам доустановит **MarkdownEditing** и **Markdown Extended**.
+
+## Вручную
 
 1. Поставить [Sublime Text](https://www.sublimetext.com/download).
-2. `Preferences` → `Browse Packages…` — откроется папка `Packages`.
-3. Скопировать туда `Packages/User` и `Packages/AuraTheme` из этого репозитория.
-4. Открыть Sublime: `Ctrl+Shift+P` → `Install Package Control` (если ещё нет).
-5. `Ctrl+Shift+P` → `Install Package` → поставить **MarkdownEditing** и
-   **Markdown Extended** (можно просто дождаться предложения Package Control —
-   он видит список в `Package Control.sublime-settings`).
-
-## Настройки
-
-```json
-{
-    "font_face": "Consolas",
-    "font_size": 10,
-    "line_padding_top": 1,
-    "line_padding_bottom": 1,
-    "ui_scale": 1.0,
-    "theme": "Adaptive.sublime-theme",
-    "color_scheme": "Packages/AuraTheme/aura-theme-soft.tmTheme",
-    "ignored_packages": ["Vintage"],
-    "index_files": true
-}
-```
-
-Полезно помнить:
-
-- `Ctrl+0` — сбросить случайный зум шрифта (`Ctrl+колесо`, `Ctrl+=`, `Ctrl+-`).
-- `Ctrl+Shift+P` → `Markdown Preview` — рендер Markdown в браузере.
-
-## Если тема не применилась
-
-Цветовая схема подключена по пути `Packages/AuraTheme/aura-theme-soft.tmTheme`.
-Если файл не скопирован, Sublime молча откатится на дефолтную схему. Проверить:
-`Preferences` → `Browse Packages…` → папка `AuraTheme` должна содержать
-`aura-theme-soft.tmTheme`.
+2. `Preferences` → `Browse Packages…`.
+3. Скопировать туда папки `Packages/User` и `Packages/AuraTheme`.
+4. Поставить [Package Control](https://packagecontrol.io/installation).
+5. `Ctrl+Shift+P` → `Install Package` → **MarkdownEditing**, **Markdown Extended**.
