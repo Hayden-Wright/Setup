@@ -43,6 +43,44 @@ put() {
   ok "${dst/#$HOME/~}"
 }
 
+# put_env <источник> <назначение> — как put, но значения ключей, которые уже
+# есть в файле-назначении, остаются: шаблон их оставляет пустыми, а заполняет
+# их install-friend.sh под конкретную машину.
+#
+# Без этого повторный запуск затирал бы openwebui.env шаблоном: WEBUI_SECRET_KEY
+# и OPENAI_API_KEY снова оказывались пустыми, скрипт генерировал НОВЫЙ секрет
+# сессий (все, кто был в чате, разлогинивались) и создавал в cptr второй ключ
+# при живом первом. Остальные строки — переменные образа — обновляются как
+# обычно, чтобы шаблон оставался источником правды.
+put_env() {
+  local src="$1" dst="$2" mode="${3:-644}" k
+  if [[ "$DRY" == "1" ]]; then
+    log "обновил бы (ключи сохранил): ${dst/#$HOME/~}"
+    return
+  fi
+  if [[ ! -f "$dst" ]]; then
+    put "$src" "$dst" "$mode"
+    return
+  fi
+  mkdir -p "$(dirname "$dst")"
+  cp -p "$dst" "$dst.bak-$STAMP"
+  cp "$src" "$dst"
+  for k in WEBUI_SECRET_KEY OPENAI_API_KEY; do
+    local have
+    have="$(sed -n "s/^$k=//p" "$dst.bak-$STAMP" | head -1)"
+    [[ -n "$have" ]] || continue
+    python3 -I - "$dst" "$k" "$have" <<'PY'
+import pathlib, re, sys
+path, key, value = pathlib.Path(sys.argv[1]), sys.argv[2], sys.argv[3]
+text = path.read_text()
+text = re.sub(rf'^{re.escape(key)}=.*$', f'{key}={value}', text, flags=re.M)
+path.write_text(text)
+PY
+  done
+  chmod "$mode" "$dst"
+  ok "${dst/#$HOME/~} (ключи сохранены)"
+}
+
 # ---------------------------------------------------------------- проверки
 
 [[ -d "$FILES" ]] || { log "нет каталога files/ рядом со скриптом"; exit 1; }
@@ -80,7 +118,7 @@ put "$FILES/zim-memory/zim-memory"           "$HOME/.local/bin/zim-memory" 755
 
 log "3/4  SearxNG, Open WebUI, cptr"
 put "$FILES/searxng-settings.yml"            "$HOME/.config/zim-claude/searxng/settings.yml"
-put "$FILES/openwebui/openwebui.env"         "$HOME/zim-claude/openwebui/openwebui.env" 600
+put_env "$FILES/openwebui/openwebui.env"     "$HOME/zim-claude/openwebui/openwebui.env" 600
 put "$FILES/openwebui/run-openwebui.sh"      "$HOME/zim-claude/openwebui/run-openwebui.sh" 755
 put "$FILES/start-cptr.sh"                   "$HOME/start-cptr.sh" 755
 put "$FILES/start-all.sh"                    "$HOME/start-all.sh" 755

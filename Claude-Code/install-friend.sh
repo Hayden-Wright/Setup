@@ -224,13 +224,36 @@ fi
 #           в прокси, которого нет (zim-claude поднял бы его сам, но только
 #           если конфиг уже на месте — а доработки кладутся следующим шагом);
 #   :4002 — агент cptr в Open WebUI получает 400 на каждую модель.
+#
+# Проверяем результат по порту, а не по коду возврата: вывод идёт через
+# конвейер с tail, и код возврата берётся от tail, который всегда 0. Упавший
+# прокси иначе выглядел бы как поднявшийся, а всплывало это позже — зависшим
+# на «Handling...» терминалом.
+proxy_up() {
+  curl -sf "http://127.0.0.1:$1/health/liveliness" -o /dev/null --max-time 3 2>/dev/null
+}
+
 have "поднимаю прокси :4000 (для терминала)"
 "$HOME/.local/bin/start-litellm.sh" restart 2>&1 | tail -2 | sed 's/^/      /'
+if proxy_up 4000; then
+  ok "прокси :4000 отвечает"
+else
+  warn "прокси :4000 не поднялся — терминал будет висеть на «Handling...»"
+  warn "смотри /tmp/litellm-proxy.log"
+  todo "поднять прокси :4000 (~/.local/bin/start-litellm.sh restart)"
+fi
 
 if [[ -x "$ZIM_DIR/claude-desktop-integration/start-desktop-proxy.sh" ]]; then
   have "поднимаю прокси :4002 (для агента cptr)"
   ( cd "$ZIM_DIR/claude-desktop-integration" && ./start-desktop-proxy.sh restart ) \
     2>&1 | tail -2 | sed 's/^/      /'
+  if proxy_up 4002; then
+    ok "прокси :4002 отвечает"
+  else
+    warn "прокси :4002 не поднялся — агент в Open WebUI будет отвечать ошибкой"
+    warn "смотри /tmp/litellm-desktop.log"
+    todo "поднять прокси :4002 (cd ~/zim-claude/claude-desktop-integration && ./start-desktop-proxy.sh restart)"
+  fi
 fi
 
 # ── 5. доработки ─────────────────────────────────────────────────────────────
@@ -249,9 +272,11 @@ fi
 # Перезапускаем ПОСЛЕ доработок — на шаге 4 конфиг был ещё исходный.
 have "перезапускаю прокси, чтобы подхватил новый конфиг"
 "$HOME/.local/bin/start-litellm.sh" restart 2>&1 | tail -1 | sed 's/^/      /'
+proxy_up 4000 || warn "прокси :4000 не поднялся после перезапуска — смотри /tmp/litellm-proxy.log"
 if [[ -x "$ZIM_DIR/claude-desktop-integration/start-desktop-proxy.sh" ]]; then
   ( cd "$ZIM_DIR/claude-desktop-integration" && ./start-desktop-proxy.sh restart ) \
     2>&1 | tail -1 | sed 's/^/      /'
+  proxy_up 4002 || warn "прокси :4002 не поднялся — смотри /tmp/litellm-desktop.log"
 fi
 
 # PATH для zsh: install.sh прописывает только ~/.bashrc, а оболочка по
@@ -484,8 +509,14 @@ fi
 
 # API-ключ cptr создаём сами: он привязан к id пользователя, а JWT подписывается
 # секретом из config.toml. Так друг не проходит через админку руками.
+#
+# KEY объявляем пустым заранее: при повторном запуске ключ уже прописан, ветка
+# else не выполняется, а ниже он всё равно подставляется в базу Open WebUI.
+# Без этого `set -u` роняет скрипт на последнем шаге.
+KEY=""
 if grep -q '^OPENAI_API_KEY=sk-cptr-' "$ENV_FILE" 2>/dev/null; then
   have "ключ cptr уже прописан"
+  KEY="$(sed -n 's/^OPENAI_API_KEY=//p' "$ENV_FILE" | head -1)"
 else
   KEY="$("$CPTR_PY" -I - "$HOME" <<'PY' 2>/dev/null
 import json, pathlib, sqlite3, sys, time, uuid, urllib.request, tomllib
