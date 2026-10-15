@@ -88,12 +88,29 @@ docker run -d --name searxng --restart unless-stopped \
 docker logs searxng          # если не поднялся
 ```
 
-**Прокси не отвечает.**
+**Терминал завис на «Handling...».** Не поднят прокси `:4000`. Скрипт
+запускает его сам, но проверить можно так:
 
 ```bash
 ~/.local/bin/start-litellm.sh status
 ~/.local/bin/start-litellm.sh restart
 ```
+
+**В Open WebUI «No models available».** Контейнер не видит cptr. Скрипт
+прописывает настройки в базу Open WebUI сам; вручную:
+
+```bash
+# проверить, что cptr отдаёт модель
+KEY=$(grep '^OPENAI_API_KEY=' ~/zim-claude/openwebui/openwebui.env | cut -d= -f2)
+curl -s -H "Authorization: Bearer $KEY" http://127.0.0.1:8100/v1/models
+```
+
+Если пусто — cptr не запущен (`~/start-cptr.sh status`). Если модель есть, а
+в браузере нет — перезапусти контейнер: `docker restart open-webui`.
+
+**«Auto-update failed» в терминале.** Обновление Claude Code не проходит —
+это тот же заблокированный `downloads.claude.ai`. На работу не влияет,
+можно игнорировать.
 
 **Веб-поиск отвечает только короткими сниппетами.** Контейнер Open WebUI
 поднят не через `run-openwebui.sh`, и в нём нет нужных переменных. Поднимай
