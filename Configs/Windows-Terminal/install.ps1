@@ -166,22 +166,30 @@ function Install-ProfileBlock {
     # Выкидываем прежний блок этого скрипта, если он там уже был, — чтобы
     # повторный запуск обновлял блок, а не плодил копии.
     #
-    # Вместе с блоком убираем и осиротевшие строки-заголовки от прежних версий
-    # файла: раньше заголовок стоял ВЫШЕ метки и потому не вырезался, а каждый
-    # запуск добавлял ещё одну копию. На живом профиле их накопилось четыре.
-    # Строки-заголовки узнаём по началу строки и убираем только перед меткой,
-    # чтобы не тронуть похожий текст в чужом коде ниже.
+    # Заодно срезаем осиротевшие строки-заголовки от прежних версий файла:
+    # раньше заголовок стоял ВЫШЕ метки и потому не вырезался, а каждый запуск
+    # добавлял ещё одну копию — на живом профиле их накопилось четыре.
+    #
+    # В момент, когда встречается метка, хвост $kept — это ровно те строки, что
+    # стоят перед блоком. Снимаем с конца всё, что является заголовком или
+    # пустой строкой, и останавливаемся на первой посторонней: чужой код прямо
+    # над блоком остаётся цел.
     $kept = New-Object System.Collections.Generic.List[string]
     $inside = $false
     foreach ($line in $existing) {
-        if ($line.Contains($MarkerStart)) { $inside = $true;  continue }
-        if ($line.Contains($MarkerEnd))   { $inside = $false; continue }
-        if ($inside) { continue }
-        $t = $line.TrimStart()
-        $isLegacy = $false
-        foreach ($h in $LegacyHeaders) { if ($t -like "$h*") { $isLegacy = $true; break } }
-        if ($isLegacy) { continue }
-        $kept.Add($line)
+        if ($line.Contains($MarkerStart)) {
+            while ($kept.Count -gt 0) {
+                $last = $kept[$kept.Count - 1]
+                $t = $last.TrimStart()
+                $isHeader = $false
+                foreach ($h in $LegacyHeaders) { if ($t -like "$h*") { $isHeader = $true; break } }
+                if ($isHeader -or $last.Trim() -eq '') { $kept.RemoveAt($kept.Count - 1) } else { break }
+            }
+            $inside = $true
+            continue
+        }
+        if ($line.Contains($MarkerEnd)) { $inside = $false; continue }
+        if (-not $inside) { $kept.Add($line) }
     }
 
     # Хвостовые пустые строки убираем, потом ставим один разделитель.
