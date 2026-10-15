@@ -21,3 +21,7 @@
 
 - <img src="https://www.google.com/s2/favicons?domain=intel.com&sz=64" width="16"> **[Intel Ethernet](https://www.intel.com/content/www/us/en/download/15084/intel-ethernet-adapter-complete-driver-pack.html)**
 - <img src="https://www.google.com/s2/favicons?domain=www.realtek.com&sz=64" width="16"> **[Realtek](https://www.realtek.com/Download/List?cate_id=584)**
+
+## Удаление
+
+- <img src="https://www.google.com/s2/favicons?domain=wagnardsoft.com&sz=64" width="16"> **[DDU](https://www.wagnardsoft.com/display-driver-uninstaller-DDU-)**
