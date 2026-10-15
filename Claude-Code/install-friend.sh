@@ -134,14 +134,32 @@ else
 fi
 
 have "запускаю установщик zim-claude (теперь он ничего не спрашивает)"
+# Код возврата install.sh теряется в конвейере с sed, поэтому смотрим на него
+# явно через PIPESTATUS: иначе провалившийся установщик выглядел бы как успех,
+# а дальше всё падало бы на отсутствующем zim-claude с непонятной ошибкой.
 ( cd "$ZIM_DIR" && ./install.sh ) 2>&1 | sed 's/^/      /'
-[[ -x "$HOME/.local/bin/zim-claude" ]] && ok "zim-claude установлен" || warn "проверь вывод выше"
+INSTALL_RC="${PIPESTATUS[0]}"
+
+if [[ ! -x "$HOME/.local/bin/zim-claude" ]]; then
+  fail "zim-claude не установился — смотри вывод выше"
+  exit 1
+elif (( INSTALL_RC != 0 )); then
+  warn "установщик завершился с кодом $INSTALL_RC, но zim-claude на месте"
+  warn "проверь вывод выше: возможно, что-то пропущено"
+  ok "zim-claude установлен"
+else
+  ok "zim-claude установлен"
+fi
 
 # ── 5. доработки ─────────────────────────────────────────────────────────────
 
 step "5/8  Доработки (веб-поиск, zim-memory, конфиги)"
 
 ( cd "$SRC" && ./deploy.sh ) 2>&1 | sed 's/^/      /'
+if (( PIPESTATUS[0] != 0 )); then
+  fail "deploy.sh завершился с ошибкой — смотри вывод выше"
+  exit 1
+fi
 
 # PATH для zsh: install.sh прописывает только ~/.bashrc, а оболочка по
 # умолчанию в Ubuntu — zsh, если её поставили.
@@ -254,6 +272,10 @@ have "пользователь cptr заведён"
 
 # Настройки cptr в базу (модель для чата, профиль агента).
 "$SRC/setup-cptr.sh" 2>&1 | sed 's/^/      /'
+if (( PIPESTATUS[0] != 0 )); then
+  fail "не удалось записать настройки cptr — смотри вывод выше"
+  exit 1
+fi
 
 # ── 8. Open WebUI ────────────────────────────────────────────────────────────
 
@@ -331,6 +353,10 @@ if docker ps --format '{{.Names}}' | grep -qx open-webui; then
   have "контейнер уже запущен"
 else
   ( cd "$ZIM_DIR/openwebui" && ./run-openwebui.sh ) 2>&1 | sed 's/^/      /'
+  if (( PIPESTATUS[0] != 0 )); then
+    fail "Open WebUI не запустился — смотри вывод выше"
+    exit 1
+  fi
   ok "запущен"
 fi
 
