@@ -4,19 +4,10 @@
 
 - **[Equalizer APO](https://sourceforge.net/projects/equalizerapo/)** — при установке отметить устройство вывода, потом перезагрузиться
 - **[Peace](https://sourceforge.net/projects/peace-equalizer-apo-extension/)** — ставится после APO
-- **[LoudMax](https://loudmax.blogspot.com/2026/06/loudmax-plugin-v147-released.html)** — лимитер, архив **VST2 for Windows**
 
 ## Пресет
 
 Peace → `Import` → `.peace` из репозитория → `Save` → `Done`.
-
-## Лимитер
-
-`LoudMax64.dll` из архива — в любую папку, потом не перемещать. Configuration
-Editor (`config.txt`) → `+` → **VST plugin** → путь к dll → `Options` →
-`Thresh` −6 dB, `Output` −6 dB, `Link`.
-
-<img src="config-editor.png" width="480">
 
 ## Пресет 1
 
@@ -43,3 +34,14 @@ Editor (`config.txt`) → `+` → **VST plugin** → путь к dll → `Option
 
 Тип — в строке `Filter` под ползунком (`LS` / `PK` / `HS`), Gain и Q — под
 графиком.
+
+## Лимитер
+
+Ставится последним — после пресета. **[LoudMax](https://loudmax.blogspot.com/2026/06/loudmax-plugin-v147-released.html)**,
+архив **VST2 for Windows**.
+
+`LoudMax64.dll` из архива — в любую папку, потом не перемещать. Configuration
+Editor (`config.txt`) → `+` → **VST plugin** → путь к dll → `Options` →
+`Thresh` −6 dB, `Output` −6 dB, `Link`.
+
+<img src="config-editor.png" width="480">
