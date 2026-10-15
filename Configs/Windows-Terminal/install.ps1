@@ -3,7 +3,7 @@
     Полная настройка Windows Terminal + Fastfetch из репозитория Setup.
 
     Одной командой (PowerShell):
-        irm "https://raw.githubusercontent.com/Hayden-Wright/Setup/main/%D0%9A%D0%BE%D0%BD%D1%84%D0%B8%D0%B3%D0%B8/Windows%20Terminal/install.ps1" -OutFile $env:TEMP\wt-setup.ps1; & $env:TEMP\wt-setup.ps1
+        irm "https://raw.githubusercontent.com/Hayden-Wright/Setup/main/Configs/Windows-Terminal/install.ps1" -OutFile $env:TEMP\wt-setup.ps1; & $env:TEMP\wt-setup.ps1
 
     Или из клона репозитория:
         .\install.ps1
@@ -26,8 +26,7 @@
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [Text.Encoding]::UTF8
 
-# URL закодирован вручную: так он не зависит от кодировки самого файла
-$Base = 'https://raw.githubusercontent.com/Hayden-Wright/Setup/main/%D0%9A%D0%BE%D0%BD%D1%84%D0%B8%D0%B3%D0%B8/Windows%20Terminal'
+$Base = 'https://raw.githubusercontent.com/Hayden-Wright/Setup/main/Configs/Windows-Terminal'
 
 # Имя семейства шрифта, как его видит Windows. По нему проверяем, стоит ли шрифт.
 $FontFamily = 'JetBrainsMono NFM'

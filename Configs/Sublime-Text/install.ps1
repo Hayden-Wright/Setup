@@ -3,7 +3,7 @@
     Полная установка Sublime Text с настройками из репозитория setup.
 
     Одной командой (PowerShell):
-        irm "https://raw.githubusercontent.com/Hayden-Wright/Setup/main/%D0%9A%D0%BE%D0%BD%D1%84%D0%B8%D0%B3%D0%B8/Sublime%20Text/install.ps1" -OutFile $env:TEMP\sublime-setup.ps1; & $env:TEMP\sublime-setup.ps1
+        irm "https://raw.githubusercontent.com/Hayden-Wright/Setup/main/Configs/Sublime-Text/install.ps1" -OutFile $env:TEMP\sublime-setup.ps1; & $env:TEMP\sublime-setup.ps1
 
     Или из клона репозитория:
         .\install.ps1
@@ -22,8 +22,7 @@
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [Text.Encoding]::UTF8
 
-# URL закодирован вручную: так он не зависит от кодировки самого файла
-$Base = 'https://raw.githubusercontent.com/Hayden-Wright/Setup/main/%D0%9A%D0%BE%D0%BD%D1%84%D0%B8%D0%B3%D0%B8/Sublime%20Text'
+$Base = 'https://raw.githubusercontent.com/Hayden-Wright/Setup/main/Configs/Sublime-Text'
 
 $SublimeDir   = Join-Path $env:APPDATA 'Sublime Text'
 $PackagesDir  = Join-Path $SublimeDir 'Packages'

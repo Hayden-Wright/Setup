@@ -8,7 +8,7 @@
 Открой PowerShell (Win+X → «Терминал») и вставь:
 
 ```powershell
-irm "https://raw.githubusercontent.com/Hayden-Wright/Setup/main/%D0%9A%D0%BE%D0%BD%D1%84%D0%B8%D0%B3%D0%B8/Windows%20Terminal/install.ps1" -OutFile $env:TEMP\wt-setup.ps1; & $env:TEMP\wt-setup.ps1
+irm "https://raw.githubusercontent.com/Hayden-Wright/Setup/main/Configs/Windows-Terminal/install.ps1" -OutFile $env:TEMP\wt-setup.ps1; & $env:TEMP\wt-setup.ps1
 ```
 
 Больше ничего делать не нужно: скрипт сам поставит всё, что нужно, сделает
@@ -112,7 +112,7 @@ Select-String -Path $PROFILE -Pattern 'Setup: fastfetch'   # дописан ли
 `settings.json` из папки рядом с собой:
 
 ```powershell
-cd "путь\к\Setup\Конфиги\Windows Terminal"
+cd "путь\к\Setup\Configs\Windows-Terminal"
 .\install.ps1
 ```
 
