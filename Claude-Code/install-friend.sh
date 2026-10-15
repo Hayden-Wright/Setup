@@ -41,6 +41,12 @@ need() { command -v "$1" >/dev/null 2>&1; }
 
 [[ -d "$FILES" ]] || { fail "нет каталога files/ рядом со скриптом — запусти из корня репозитория"; exit 1; }
 
+# ~/.local/bin добавляем в PATH СРАЗУ. Иначе на повторном запуске уже
+# установленный claude (и zim-claude, и zim-memory) не находится: install.sh
+# правит PATH только в конфигах, а текущий терминал его не видит — скрипт
+# решает, что ничего не установлено, и идёт ставить заново.
+export PATH="$HOME/.local/bin:$PATH"
+
 printf '%sZim-стек: установка%s\n' "$B" "$N"
 printf '%sМожно запускать повторно — уже сделанное пропускается.%s\n' "$D" "$N"
 
@@ -236,26 +242,72 @@ step "6/8  SearxNG (локальный веб-поиск)"
 
 docker network inspect zim-net >/dev/null 2>&1 || docker network create zim-net >/dev/null 2>&1
 
+# Образ весит ~380 МБ, и на свежей машине его нужно скачать. Раньше это шло
+# с заглушённым выводом: терминал молчал несколько минут, а потом появлялось
+# «не удалось запустить» без причины. Теперь скачивание видно, а ошибка
+# докера печатается как есть.
+SEARXNG_OK=0
+
 if docker ps -a --format '{{.Names}}' | grep -qx searxng; then
   docker start searxng >/dev/null 2>&1
   have "контейнер уже есть — запущен"
+  SEARXNG_OK=1
 else
-  docker run -d --name searxng --restart unless-stopped \
-    -p 127.0.0.1:8888:8080 \
-    -v "$HOME/.config/zim-claude/searxng/settings.yml:/etc/searxng/settings.yml:ro" \
-    searxng/searxng:latest >/dev/null 2>&1 \
-    && ok "запущен" || { fail "не удалось запустить SearxNG"; exit 1; }
+  have "скачиваю образ SearxNG (~380 МБ, один раз)"
+  # Вывод забираем в переменную, а не в конвейер: в `if docker pull ... | tail`
+  # проверяется код возврата tail, который всегда 0, — провал скачивания
+  # прошёл бы как успех.
+  PULL_OUT="$(docker pull searxng/searxng:latest 2>&1)"
+  PULL_RC=$?
+  printf '%s\n' "$PULL_OUT" | tail -3 | sed 's/^/      /'
+
+  if (( PULL_RC == 0 )); then
+    if docker run -d --name searxng --restart unless-stopped \
+         -p 127.0.0.1:8888:8080 \
+         -v "$HOME/.config/zim-claude/searxng/settings.yml:/etc/searxng/settings.yml:ro" \
+         searxng/searxng:latest >/dev/null 2>&1; then
+      ok "запущен"
+      SEARXNG_OK=1
+    else
+      warn "образ есть, но контейнер не запустился — вот причина:"
+      docker run -d --name searxng --restart unless-stopped \
+        -p 127.0.0.1:8888:8080 \
+        -v "$HOME/.config/zim-claude/searxng/settings.yml:/etc/searxng/settings.yml:ro" \
+        searxng/searxng:latest 2>&1 | sed 's/^/      /'
+      docker rm -f searxng >/dev/null 2>&1
+    fi
+  else
+    warn "не удалось скачать образ SearxNG — проверь связь с интернетом"
+    warn "вручную:  docker pull searxng/searxng:latest"
+  fi
 fi
 docker network connect zim-net searxng >/dev/null 2>&1
 
 # Ждём, пока поднимется, и проверяем именно JSON: без formats: json SearxNG
 # отвечает 403, и LiteLLM получает пустую выдачу.
-for _ in $(seq 1 20); do
-  if curl -sf 'http://127.0.0.1:8888/search?q=test&format=json' -o /dev/null 2>/dev/null; then
-    ok "отвечает"; break
+if (( SEARXNG_OK )); then
+  SEARXNG_UP=0
+  for _ in $(seq 1 30); do
+    if curl -sf 'http://127.0.0.1:8888/search?q=test&format=json' -o /dev/null 2>/dev/null; then
+      ok "отвечает"
+      SEARXNG_UP=1
+      break
+    fi
+    sleep 1
+  done
+  if (( ! SEARXNG_UP )); then
+    # Раньше здесь просто заканчивался цикл — и дальше всё шло молча, будто
+    # всё в порядке, а веб-поиск потом не работал.
+    warn "контейнер запущен, но не отвечает на 127.0.0.1:8888 за 30 с"
+    warn "смотри лог:  docker logs searxng"
+    SEARXNG_OK=0
   fi
-  sleep 1
-done
+fi
+
+if (( ! SEARXNG_OK )); then
+  warn "веб-поиск работать не будет, пока SearxNG не поднимется"
+  todo "запустить SearxNG (см. README, раздел «Если что-то не так»)"
+fi
 
 # ── 7. cptr ──────────────────────────────────────────────────────────────────
 
