@@ -31,14 +31,14 @@ Fastfetch с ASCII-артом при запуске. Ставит Terminal, шр
 `winget`, если их нет.
 
 ```powershell
-irm "https://raw.githubusercontent.com/Hayden-Wright/Setup/main/Configs/Windows-Terminal/install.ps1" -OutFile $env:TEMP\wt-setup.ps1; & $env:TEMP\wt-setup.ps1
+Set-ExecutionPolicy Bypass -Scope Process -Force; irm "https://raw.githubusercontent.com/Hayden-Wright/Setup/main/Configs/Windows-Terminal/install.ps1" -OutFile $env:TEMP\wt-setup.ps1; & $env:TEMP\wt-setup.ps1
 ```
 
 **Sublime Text** — тема Aura, шрифт Consolas, подсветка Markdown. Ставит
 редактор и все пакеты.
 
 ```powershell
-irm "https://raw.githubusercontent.com/Hayden-Wright/Setup/main/Configs/Sublime-Text/install.ps1" -OutFile $env:TEMP\sublime-setup.ps1; & $env:TEMP\sublime-setup.ps1
+Set-ExecutionPolicy Bypass -Scope Process -Force; irm "https://raw.githubusercontent.com/Hayden-Wright/Setup/main/Configs/Sublime-Text/install.ps1" -OutFile $env:TEMP\sublime-setup.ps1; & $env:TEMP\sublime-setup.ps1
 ```
 
 Оба скрипта можно запускать повторно — они обновляют настройки, а прежние
@@ -47,12 +47,17 @@ irm "https://raw.githubusercontent.com/Hayden-Wright/Setup/main/Configs/Sublime-
 
 ## Если скрипты не запускаются
 
-PowerShell по умолчанию запрещает выполнение скачанных скриптов. Разрешить
-для текущего пользователя:
+Первая часть команды выше снимает запрет на время работы окна. Если запускаешь
+скрипт иначе, добавь её перед запуском:
 
 ```powershell
-Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+Set-ExecutionPolicy Bypass -Scope Process -Force
 ```
+
+Так команда действует только внутри текущего окна PowerShell: закроешь его —
+политика вернётся к прежней. На свежей Windows политика `Restricted`, и без
+этого запуск падает с «выполнение сценариев отключено в этой системе». Менять
+настройку навсегда (`-Scope CurrentUser`) не нужно.
 
 `irm` не распознан — значит, открыта старая командная строка (`cmd.exe`)
 вместо PowerShell. Win+X → «Терминал».
