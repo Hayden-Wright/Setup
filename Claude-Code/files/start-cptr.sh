@@ -1,4 +1,4 @@
-#!/bin/zsh
+#!/usr/bin/env bash
 # Open WebUI Computer (cptr) — запуск и управление.
 #
 #   ./start-cptr.sh start|stop|restart|status|url|logs
@@ -97,8 +97,20 @@ case "$1" in
     fi
     ;;
   url)
+    # Токен появляется в логе только при ПЕРВОМ запуске на чистой базе: cptr
+    # печатает ссылку с одноразовым токеном доступа, пока пользователя нет.
+    # Дальше строки в логе нет, и раньше команда всё равно печатала
+    # `?token=` с пустым значением — выглядело как рабочая ссылка, но вела
+    # никуда. Поэтому проверяем и честно говорим, что токена нет.
     TOKEN=$(grep -oE 'token=[a-f0-9]+' "$CPTR_LOG" 2>/dev/null | head -1 | cut -d= -f2)
-    echo "http://$CPTR_HOST:$CPTR_PORT/?token=$TOKEN"
+    if [[ -n "$TOKEN" ]]; then
+      echo "http://$CPTR_HOST:$CPTR_PORT/?token=$TOKEN"
+    else
+      echo "токена нет в $CPTR_LOG" >&2
+      echo "он появляется только при первом запуске на чистой базе." >&2
+      echo "если cptr уже настроен — просто открой http://$CPTR_HOST:$CPTR_PORT" >&2
+      exit 1
+    fi
     ;;
   logs)
     tail -f "$CPTR_LOG"

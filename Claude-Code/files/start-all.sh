@@ -1,7 +1,12 @@
-#!/bin/zsh
+#!/usr/bin/env bash
 
-# Загружаем конфигурацию zsh, чтобы подтянулись все алиасы и PATH
-[[ -f ~/.zshrc ]] && source ~/.zshrc
+# Подтягиваем PATH из профиля оболочки — какой бы она ни была. Раньше здесь
+# был только ~/.zshrc, и на системе без zsh (обычный Ubuntu из wsl --install)
+# ~/.local/bin в PATH не попадал, а вместе с ним не находились zim-claude и
+# zim-memory.
+[[ -f ~/.profile ]] && . ~/.profile
+[[ -f ~/.zshrc ]] && . ~/.zshrc
+export PATH="$HOME/.local/bin:$PATH"
 
 # Отключаем предупреждения о неизвестной модели
 export CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_WINDOW_ENFORCEMENT=1
@@ -25,13 +30,30 @@ docker start searxng >/dev/null 2>&1 || docker run -d --name searxng --restart u
   searxng/searxng:latest >/dev/null 2>&1
 docker network connect zim-net searxng 2>/dev/null
 
-echo "=== 4. Open WebUI отключён (оставлен только Computer на :8100) ==="
+echo "=== 4. Запуск Open WebUI (браузерный чат) ==="
+# Раньше здесь стояло «Open WebUI отключён» — от старой схемы, когда браузер
+# был отдельным контейнером :3000. Сейчас Open WebUI это и есть cptr, он
+# поднимается шагом ниже.
+if docker ps -a --format '{{.Names}}' | grep -qx open-webui; then
+  docker start open-webui >/dev/null 2>&1 && echo "Open WebUI: http://127.0.0.1:3000"
+fi
 
-echo "=== 5. Запуск прокси ==="
+echo "=== 5. Запуск прокси Desktop-шлюза ==="
 cd ~/zim-claude/claude-desktop-integration && ./start-desktop-proxy.sh >/dev/null 2>&1 &
 
-echo "=== 6. Запуск Open WebUI Computer ==="
-~/start-cptr.sh start >/dev/null 2>&1 && echo "Computer: $(~/start-cptr.sh url 2>/dev/null)"
+echo "=== 6. Запуск cptr (агент с доступом к диску) ==="
+# Ссылку печатаем только если cptr её выдал: на уже настроенной базе токена
+# в логе нет, и раньше выводилось «Computer: http://.../?token=» — пустышка.
+if ~/start-cptr.sh start >/dev/null 2>&1; then
+  CTRL_URL="$(~/start-cptr.sh url 2>/dev/null || true)"
+  if [[ -n "$CTRL_URL" ]]; then
+    echo "Computer: $CTRL_URL"
+  else
+    echo "Computer: http://127.0.0.1:8100"
+  fi
+else
+  echo "Computer не запустился — смотри /tmp/cptr.log" >&2
+fi
 
 sleep 2
 

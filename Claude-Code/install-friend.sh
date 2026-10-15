@@ -344,11 +344,33 @@ if [[ -n "$CPTR_PKG" ]]; then
 fi
 
 # Стартуем cptr (если ещё не запущен) — дальше нужен его пользователь.
-"$HOME/start-cptr.sh" start >/dev/null 2>&1
-if curl -sf http://127.0.0.1:8100/api/config -o /dev/null 2>/dev/null; then
+# Вывод НЕ глушим: раньше ошибка запуска уходила в /dev/null, и наверху
+# появлялось только «cptr не отвечает» без причины. Самая частая причина —
+# shebang скрипта, указывающий на отсутствующий интерпретатор.
+CPTR_START_OUT="$("$HOME/start-cptr.sh" start 2>&1)"
+CPTR_START_RC=$?
+
+CPTR_UP=0
+for _ in $(seq 1 20); do
+  if curl -sf http://127.0.0.1:8100/api/config -o /dev/null 2>/dev/null; then
+    CPTR_UP=1
+    break
+  fi
+  sleep 1
+done
+
+if (( CPTR_UP )); then
   ok "cptr работает на http://127.0.0.1:8100"
 else
-  warn "cptr не отвечает — смотри /tmp/cptr.log"
+  warn "cptr не отвечает"
+  if (( CPTR_START_RC != 0 )); then
+    printf '%s\n' "$CPTR_START_OUT" | sed 's/^/      /'
+  fi
+  if ! command -v zsh >/dev/null 2>&1 && grep -q 'bad interpreter' <<<"$CPTR_START_OUT"; then
+    warn "скрипту нужен zsh, которого нет — установи его и запусти снова:"
+    warn "    sudo apt install -y zsh"
+  fi
+  warn "смотри лог:  tail -30 /tmp/cptr.log"
 fi
 
 # ── 7b. пользователь cptr ────────────────────────────────────────────────────
@@ -368,7 +390,29 @@ fi
 
 if [[ -z "$CPTR_USER" ]]; then
   step "7b/8  Нужен твой шаг: регистрация в cptr"
+
+  # Токен есть только при первом запуске на чистой базе. Если cptr не поднялся,
+  # ссылки нет вовсе — раньше в этом случае печаталось «?token=» с пустым
+  # значением, и это выглядело как рабочая ссылка, хотя вела никуда.
   URL="$("$HOME/start-cptr.sh" url 2>/dev/null)"
+  if [[ -z "$URL" ]]; then
+    fail "cptr не запущен, поэтому ссылки для регистрации нет"
+    cat <<'EOF'
+
+      Сначала подними cptr:
+
+          ~/start-cptr.sh start
+
+      Если он не стартует — посмотри причину:
+
+          tail -30 /tmp/cptr.log
+
+      Затем запусти этот скрипт снова.
+
+EOF
+    exit 1
+  fi
+
   cat <<EOF
 
   Открой в браузере эту ссылку (она с одноразовым токеном доступа):
