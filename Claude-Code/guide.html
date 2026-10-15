@@ -382,15 +382,14 @@ EOF</code></pre></div>
       <div class="body">
         <h3>Забрать файлы <span class="chip">WSL</span></h3>
         <p>
-          Все файлы установки лежат в одном архиве. Скачай его и распакуй —
-          дальше всё делает скрипт внутри.
+          Одна команда скачивает папку с файлами установки из репозитория.
         </p>
         <div class="cmd"><button class="copy" type="button">копировать</button><pre><code>cd ~
-tar xzf zim-claude-friend.tar.gz
-cd zim-claude-friend</code></pre></div>
+curl -fsSL https://github.com/Hayden-Wright/Setup/archive/refs/heads/main.tar.gz \
+  | tar xz --strip-components=2 --one-top-level=zim-setup Setup-main/Claude-Code
+cd zim-setup</code></pre></div>
         <p class="note">
-          Архив передай любым способом: через мессенджер, облако или флешку.
-          Размер 41 КБ.
+          Скачивается только эта папка, остальной репозиторий не тянется.
         </p>
       </div>
     </div>
