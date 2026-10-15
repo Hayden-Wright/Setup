@@ -52,12 +52,20 @@ MISSING=()
 for pkg in git curl python3; do
   need "$pkg" || MISSING+=("$pkg")
 done
-python3 -c 'import venv' >/dev/null 2>&1 || MISSING+=("python3-venv")
+
+# `import venv` проходит и БЕЗ пакета python3-venv: сам модуль venv лежит в
+# libpython3-stdlib, а пакет python3-venv приносит только ensurepip — без него
+# `python3 -m venv` создаёт окружение без pip и падает позже. Поэтому
+# проверяем именно ensurepip.
+python3 -c 'import ensurepip' >/dev/null 2>&1 || MISSING+=("python3-venv")
 
 if (( ${#MISSING[@]} )); then
   warn "не хватает: ${MISSING[*]}"
   echo "      сейчас установим (понадобится пароль от системы)"
-  sudo apt update -qq && sudo apt install -y "${MISSING[@]}" || { fail "не удалось установить пакеты"; exit 1; }
+  # update обязателен: на свежей WSL списки пакетов пусты, и apt не знает даже
+  # про docker.io — установка падает с "has no installation candidate".
+  sudo apt-get update -qq || warn "apt update прошёл с ошибками, продолжаю"
+  sudo apt-get install -y "${MISSING[@]}" || { fail "не удалось установить пакеты"; exit 1; }
   ok "пакеты установлены"
 else
   have "git, curl, python3, venv — уже есть"
@@ -80,7 +88,17 @@ if need docker; then
   fi
 else
   warn "Docker не установлен"
-  sudo apt install -y docker.io || { fail "не удалось поставить Docker"; exit 1; }
+  # docker.io лежит в компоненте universe. На свежей Ubuntu он обычно включён,
+  # но если выключен (или система ставилась минимальной), apt отвечает
+  #   Package 'docker.io' has no installation candidate
+  # и предлагает только "is only available from another source".
+  if ! sudo apt-get install -y docker.io; then
+    warn "не вышло напрямую — включаю компонент universe и пробую снова"
+    sudo apt-get install -y software-properties-common >/dev/null 2>&1
+    sudo add-apt-repository -y universe >/dev/null 2>&1
+    sudo apt-get update -qq || warn "apt update прошёл с ошибками, продолжаю"
+    sudo apt-get install -y docker.io || { fail "не удалось поставить Docker"; exit 1; }
+  fi
   sudo systemctl enable --now docker >/dev/null 2>&1
   sudo usermod -aG docker "$USER" >/dev/null 2>&1
   fail "Docker поставлен. Закрой это окно терминала, открой заново и запусти скрипт снова"
@@ -91,13 +109,57 @@ fi
 
 step "3/8  Claude Code"
 
+# Сам Claude Code в репозитории zim-claude НЕ лежит — там только обёртка,
+# которая запускает уже установленный `claude`. Поэтому бинарь берётся с
+# официального сайта, ровно как это делает install.sh самого zim-claude.
+# Пробуем два источника: сначала официальный установщик, потом npm.
+install_claude() {
+  local tmp; tmp="$(mktemp)"
+  have "качаю установщик (официальный сайт)..."
+  # --max-time: без него curl висит до двух минут на мёртвом соединении
+  # вместо того, чтобы сразу сказать, что связи нет.
+  if curl -fsSL --connect-timeout 15 --max-time 120 \
+       https://claude.ai/install.sh -o "$tmp" 2>/dev/null; then
+    bash "$tmp" && rm -f "$tmp" && return 0
+  fi
+  rm -f "$tmp"
+
+  warn "официальный сайт недоступен — пробую через npm"
+  if need npm; then
+    npm install -g @anthropic-ai/claude-code >/dev/null 2>&1 && return 0
+  else
+    warn "npm не установлен — ставлю nodejs и пробую снова"
+    sudo apt-get install -y nodejs npm >/dev/null 2>&1 \
+      && npm install -g @anthropic-ai/claude-code >/dev/null 2>&1 && return 0
+  fi
+  return 1
+}
+
 if need claude; then
   ok "уже установлен: $(claude --version 2>/dev/null | head -1)"
 else
-  have "устанавливаю с официального сайта..."
-  curl -fsSL https://claude.ai/install.sh | bash || { fail "не удалось установить Claude Code"; exit 1; }
-  export PATH="$HOME/.local/bin:$PATH"
-  need claude && ok "установлен" || { fail "установился, но не виден — запусти скрипт ещё раз"; exit 0; }
+  if install_claude; then
+    export PATH="$HOME/.local/bin:$PATH"
+    need claude && ok "установлен" || { fail "установился, но не виден — запусти скрипт ещё раз"; exit 0; }
+  else
+    fail "не удалось скачать Claude Code"
+    cat <<'EOF'
+
+      Скорее всего мешает VPN или прокси: соединение с downloads.claude.ai
+      не проходит. Что попробовать по порядку:
+
+        1. Выключи VPN и запусти скрипт снова.
+        2. Если включён прокси (FlClash и подобные) — выключи его или добавь
+           downloads.claude.ai и registry.npmjs.org в исключения.
+        3. Проверь связь вручную:
+             curl -I --max-time 10 https://claude.ai/install.sh
+           Должен вернуться код 302. Таймаут означает, что сеть закрыта.
+
+      После этого запусти ./install-friend.sh снова.
+
+EOF
+    exit 1
+  fi
 fi
 
 # ── 4. zim-claude ────────────────────────────────────────────────────────────
