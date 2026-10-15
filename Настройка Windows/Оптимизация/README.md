@@ -1,5 +1,7 @@
 # Оптимизация
 
+Приложения и гайды по снижению задержек и отключению лишнего в системе.
+
 ## Программы
 
 - <img src="https://www.google.com/s2/favicons?domain=boosterx.org&sz=64" width="16"> **[BoosterX](https://boosterx.org/)**
