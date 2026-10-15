@@ -7,8 +7,14 @@
 Открой PowerShell (Win+X → «Терминал») и вставь:
 
 ```powershell
-irm "https://raw.githubusercontent.com/Hayden-Wright/Setup/main/Configs/Sublime-Text/install.ps1" -OutFile $env:TEMP\sublime-setup.ps1; & $env:TEMP\sublime-setup.ps1
+Set-ExecutionPolicy Bypass -Scope Process -Force; irm "https://raw.githubusercontent.com/Hayden-Wright/Setup/main/Configs/Sublime-Text/install.ps1" -OutFile $env:TEMP\sublime-setup.ps1; & $env:TEMP\sublime-setup.ps1
 ```
+
+Первая часть (`Set-ExecutionPolicy ... -Scope Process`) нужна на свежей
+Windows: там политика `Restricted`, и без неё запуск скрипта падает с
+«выполнение сценариев отключено в этой системе». `-Scope Process` действует
+только внутри этого окна PowerShell и ничего в системе не меняет — закроешь
+окно, и всё как было.
 
 Больше ничего делать не нужно: скрипт сам поставит Sublime Text (если его нет),
 закроет запущенный редактор, сделает бэкап старых настроек, положит конфиги с
@@ -46,11 +52,16 @@ irm "https://raw.githubusercontent.com/Hayden-Wright/Setup/main/Configs/Sublime-
 PowerShell: Win+X → «Терминал», или `Win+R` → `powershell`.
 
 **«выполнение сценариев отключено в этой системе».**
-Разреши запуск для текущего пользователя и повтори команду:
+Так и должно быть на свежей Windows — политика там `Restricted`. Команда в
+разделе «Установка» уже снимает это на время работы окна. Если запускаешь
+скрипт иначе, добавь перед ним:
 
 ```powershell
-Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+Set-ExecutionPolicy Bypass -Scope Process -Force
 ```
+
+Это действует только внутри текущего окна PowerShell: закроешь его — политика
+вернётся к прежней. Менять настройку навсегда (`-Scope CurrentUser`) не нужно.
 
 **Sublime не закрылся сам.**
 Закрой его вручную (сохранив что нужно) и запусти команду снова.

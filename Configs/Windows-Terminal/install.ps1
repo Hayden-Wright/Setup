@@ -3,7 +3,7 @@
     Полная настройка Windows Terminal + Fastfetch из репозитория Setup.
 
     Одной командой (PowerShell):
-        irm "https://raw.githubusercontent.com/Hayden-Wright/Setup/main/Configs/Windows-Terminal/install.ps1" -OutFile $env:TEMP\wt-setup.ps1; & $env:TEMP\wt-setup.ps1
+        Set-ExecutionPolicy Bypass -Scope Process -Force; irm "https://raw.githubusercontent.com/Hayden-Wright/Setup/main/Configs/Windows-Terminal/install.ps1" -OutFile $env:TEMP\wt-setup.ps1; & $env:TEMP\wt-setup.ps1
 
     Или из клона репозитория:
         .\install.ps1
@@ -34,6 +34,14 @@ $FontFamily = 'JetBrainsMono NFM'
 # Метки блока, который скрипт дописывает в профиль PowerShell.
 $MarkerStart = '# >>> Setup: fastfetch >>>'
 $MarkerEnd   = '# <<< Setup: fastfetch <<<'
+
+# Заголовки, которые стояли в файле-блоке выше метки до 16.10.2026. Из-за них
+# каждый запуск добавлял в профиль ещё одну копию; строки с таким началом
+# вычищаются при установке.
+$LegacyHeaders = @(
+    '# Профиль PowerShell: UTF-8 + Fastfetch.',
+    '# Блок ниже добавлен установщиком из репозитория Setup.'
+)
 
 function Write-Step { param([string]$Text) Write-Host "  $Text" }
 function Write-Ok   { param([string]$Text) Write-Host "  [ok] $Text" -ForegroundColor Green }
@@ -157,12 +165,23 @@ function Install-ProfileBlock {
 
     # Выкидываем прежний блок этого скрипта, если он там уже был, — чтобы
     # повторный запуск обновлял блок, а не плодил копии.
+    #
+    # Вместе с блоком убираем и осиротевшие строки-заголовки от прежних версий
+    # файла: раньше заголовок стоял ВЫШЕ метки и потому не вырезался, а каждый
+    # запуск добавлял ещё одну копию. На живом профиле их накопилось четыре.
+    # Строки-заголовки узнаём по началу строки и убираем только перед меткой,
+    # чтобы не тронуть похожий текст в чужом коде ниже.
     $kept = New-Object System.Collections.Generic.List[string]
     $inside = $false
     foreach ($line in $existing) {
         if ($line.Contains($MarkerStart)) { $inside = $true;  continue }
         if ($line.Contains($MarkerEnd))   { $inside = $false; continue }
-        if (-not $inside) { $kept.Add($line) }
+        if ($inside) { continue }
+        $t = $line.TrimStart()
+        $isLegacy = $false
+        foreach ($h in $LegacyHeaders) { if ($t -like "$h*") { $isLegacy = $true; break } }
+        if ($isLegacy) { continue }
+        $kept.Add($line)
     }
 
     # Хвостовые пустые строки убираем, потом ставим один разделитель.

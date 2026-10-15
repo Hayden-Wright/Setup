@@ -1,6 +1,4 @@
-﻿# Профиль PowerShell: UTF-8 + Fastfetch.
-# Блок ниже добавлен установщиком из репозитория Setup.
-# >>> Setup: fastfetch >>>
+﻿# >>> Setup: fastfetch >>>
 try {
     [Console]::InputEncoding  = [System.Text.Encoding]::UTF8
     [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
