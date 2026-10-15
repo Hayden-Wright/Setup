@@ -1,0 +1,55 @@
+model_list:
+  - model_name: deepseek-v4.1-flash
+    litellm_params:
+      model: openai/deepseek-ai/DeepSeek-V4.1-Flash
+      api_base: https://api.tokenjuice.ai/v1
+      api_key: os.environ/ANTHROPIC_AUTH_TOKEN
+
+# --- Веб-поиск -------------------------------------------------------------
+# Апстрим (Token Juice → DeepSeek) не поддерживает серверный веб-поиск:
+# Claude Code шлёт инструмент web_search_20250305, LiteLLM конвертирует его
+# в OpenAI-формат web_search_preview, и апстрим отвечает
+#   400 "Unsupported Responses tools type 'web_search_preview'".
+#
+# Лечится перехватом: LiteLLM сам вырезает этот инструмент, выполняет поиск
+# через search_tools ниже и возвращает модели готовые результаты. Апстрим
+# неподдерживаемый инструмент вообще не видит.
+#
+# enabled_providers обязателен: по умолчанию перехват включён только для
+# bedrock, а у нас провайдер openai (см. model выше) — без этой строки
+# перехват молча пропускает запрос и 400 возвращается.
+#
+# SearxNG поднят локально в докере (контейнер `searxng`, порт 8888),
+# ключи не нужны. Конфиг: ~/.config/zim-claude/searxng/settings.yml
+search_tools:
+  - search_tool_name: local-searxng
+    litellm_params:
+      search_provider: searxng
+      api_base: http://127.0.0.1:8888
+
+litellm_settings:
+  # Порядок важен: сначала `drop_anthropic_only` вырезает Anthropic-only поля
+  # (`thinking` и др.), которые апстрим отвергает с 400, и только потом
+  # отрабатывает перехват веб-поиска.
+  #
+  # Причина: Claude Code >= 2.1.169 всегда шлёт
+  #     thinking: {"type": "adaptive", "display": "omitted"}
+  # а модель зарегистрирована как `openai/...`, которого нет в карте моделей
+  # LiteLLM, — поэтому поле уходит в OpenAI-апстрим как есть и получает
+  #     400 {"message":"Invalid request","type":"Bad Request"}
+  # `drop_params: true` тут не помогает: он выкидывает лишь то, что LiteLLM
+  # уже опознал как чужое. Подробности — в drop_anthropic_only.py
+  callbacks: ["drop_anthropic_only.proxy_handler_instance", "websearch_interception"]
+  websearch_interception_params:
+    search_tool_name: local-searxng
+    enabled_providers: ["openai"]
+
+# LiteLLM >= 1.104.0 refuses to boot a proxy with no master key (an
+# unauthenticated proxy relaying to a paid upstream is an open relay).
+#
+# The master key MUST be the token Claude Code already sends as
+# `Authorization: Bearer ...` — that is ANTHROPIC_AUTH_TOKEN, set by
+# install.sh in the env file. Any other value would start the proxy but
+# 401 every request. os.environ/ keeps the secret out of this file.
+general_settings:
+  master_key: os.environ/ANTHROPIC_AUTH_TOKEN

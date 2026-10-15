@@ -1,0 +1,550 @@
+<title>Zim-стек с нуля</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+  /* ── План ────────────────────────────────────────────────────────────────
+     Цвет:   холодные нейтрали с синим уклоном + зелёный акцент (успех)
+     Шрифт:  IBM Plex Sans для текста, JetBrains Mono для команд
+     Макет:  одна колонка, рельса с номером шага слева, чип «где выполнять»
+     ──────────────────────────────────────────────────────────────────────── */
+  :root {
+    --bg: #f5f7f9;
+    --surface: #ffffff;
+    --surface-2: #eaeef3;
+    --ink: #14171d;
+    --muted: #5b6472;
+    --line: #d7dce4;
+    --accent: #2c6a4c;
+    --accent-soft: #e2efe8;
+    --warn: #8a5300;
+    --warn-soft: #fbf1de;
+    --code-bg: #11141a;
+    --code-ink: #dde3ec;
+    --radius: 10px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0e1015;
+      --surface: #161a21;
+      --surface-2: #1d222b;
+      --ink: #e6eaf1;
+      --muted: #97a0b0;
+      --line: #29303b;
+      --accent: #6ec89c;
+      --accent-soft: #16301f;
+      --warn: #dfb063;
+      --warn-soft: #2d2312;
+      --code-bg: #0a0c11;
+      --code-ink: #dde3ec;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0e1015;
+    --surface: #161a21;
+    --surface-2: #1d222b;
+    --ink: #e6eaf1;
+    --muted: #97a0b0;
+    --line: #29303b;
+    --accent: #6ec89c;
+    --accent-soft: #16301f;
+    --warn: #dfb063;
+    --warn-soft: #2d2312;
+    --code-bg: #0a0c11;
+    --code-ink: #dde3ec;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 0;
+  }
+
+  .wrap {
+    max-width: 780px;
+    margin: 0 auto;
+    padding-block: 40px 72px;
+    display: flex;
+    flex-direction: column;
+    gap: 40px;
+  }
+
+  /* ── Шапка ─────────────────────────────────────────────────────────────── */
+  header { display: flex; flex-direction: column; gap: 16px; }
+
+  h1 {
+    font-size: clamp(1.75rem, 5vw, 2.4rem);
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+    text-wrap: balance;
+    margin: 0;
+  }
+
+  .lede {
+    font-size: 1.0625rem;
+    color: var(--muted);
+    margin: 0;
+    max-width: 62ch;
+  }
+
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .meta span {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 0.75rem;
+    letter-spacing: 0.02em;
+    padding: 4px 10px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    color: var(--muted);
+    background: var(--surface);
+  }
+
+  /* ── Заголовки разделов ───────────────────────────────────────────────── */
+  h2 {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    color: var(--muted);
+    margin: 0;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  section { display: flex; flex-direction: column; gap: 24px; }
+
+  /* ── Шаг ──────────────────────────────────────────────────────────────── */
+  .step {
+    display: grid;
+    grid-template-columns: 40px 1fr;
+    gap: 0 16px;
+  }
+  .step > .rail {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--muted);
+    padding-top: 3px;
+    font-variant-numeric: tabular-nums;
+  }
+  .step > .body {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+  }
+  .step h3 {
+    font-size: 1.0625rem;
+    font-weight: 600;
+    margin: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    text-wrap: balance;
+  }
+
+  .chip {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 0.6875rem;
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: var(--surface-2);
+    color: var(--muted);
+    white-space: nowrap;
+  }
+
+  p { margin: 0; max-width: 66ch; }
+  .note { color: var(--muted); font-size: 0.9375rem; }
+
+  code {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 0.875em;
+    background: var(--surface-2);
+    padding: 1px 5px;
+    border-radius: 4px;
+    overflow-wrap: break-word;
+  }
+
+  /* ── Блок команды ─────────────────────────────────────────────────────── */
+  .cmd {
+    position: relative;
+    background: var(--code-bg);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .cmd pre {
+    margin: 0;
+    padding: 14px 16px;
+    overflow-x: auto;
+  }
+  .cmd code {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 0.8125rem;
+    line-height: 1.7;
+    color: var(--code-ink);
+    background: none;
+    padding: 0;
+    white-space: pre;
+  }
+  .cmd .copy {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    font-family: "IBM Plex Sans", system-ui, sans-serif;
+    font-size: 0.6875rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #9aa3b2;
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 5px;
+    padding: 3px 8px;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+  .cmd:hover .copy, .cmd .copy:focus-visible { opacity: 1; }
+  .cmd .copy:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  @media (hover: none) { .cmd .copy { opacity: 1; } }
+
+  /* ── Врезки ───────────────────────────────────────────────────────────── */
+  .callout {
+    border-left: 3px solid var(--warn);
+    background: var(--warn-soft);
+    border-radius: 0 var(--radius) var(--radius) 0;
+    padding: 14px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .callout strong { color: var(--warn); font-weight: 600; }
+  .callout p { font-size: 0.9375rem; }
+
+  .callout.ok {
+    border-left-color: var(--accent);
+    background: var(--accent-soft);
+  }
+  .callout.ok strong { color: var(--accent); }
+
+  /* ── Таблицы ──────────────────────────────────────────────────────────── */
+  .scroll { overflow-x: auto; }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 0.9375rem;
+  }
+  th, td {
+    text-align: left;
+    padding: 9px 14px 9px 0;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+  }
+  th {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--muted);
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  td:first-child {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 0.8125rem;
+    white-space: nowrap;
+  }
+  td.num { font-variant-numeric: tabular-nums; }
+
+  ul { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
+  li { max-width: 66ch; }
+
+  a { color: var(--accent); text-underline-offset: 2px; }
+
+  @media (max-width: 480px) {
+    .step { grid-template-columns: 1fr; gap: 6px; }
+    .step > .rail { padding-top: 0; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header>
+    <h1>Zim-стек с нуля</h1>
+    <p class="lede">
+      Терминальный Claude Code через локальный прокси и браузерный чат с доступом
+      к машине — на чистой WSL Ubuntu. Все ключи и адреса те же, что у Хейдена.
+    </p>
+    <div class="meta">
+      <span>WSL2 · Ubuntu · zsh</span>
+      <span>~20 минут</span>
+      <span>5 шагов</span>
+      <span>архив 41 КБ</span>
+    </div>
+  </header>
+
+  <div class="callout">
+    <strong>Сначала про ключ</strong>
+    <p>
+      Ключ Token Juice (<code>tj_…</code>) лежит открытым текстом в файле
+      <code>config/token</code> публичного репозитория
+      <code>Mr-Destroyer/zim-claude</code> — он отдаётся наружу по прямой ссылке,
+      это проверено запросом. Ключ будет прописан на обеих машинах и оплачивается
+      с одного счёта: расход и лимиты общие. Смени его в Token Juice и подставь
+      новый в <code>~/claude-source/deepseek-claude</code> на обеих машинах —
+      иначе лимит может закончиться не у тебя.
+    </p>
+  </div>
+
+  <section>
+    <h2>Что получится</h2>
+    <p>
+      Две независимые половины. Их можно ставить по отдельности: если браузерная
+      часть не нужна — скрипт можно остановить и пропустить её.
+    </p>
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr><th>Половина</th><th>Что это</th><th>Шаги</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>терминал</td>
+            <td>
+              <code>zim-claude</code> — обычный Claude Code, но запросы идут не в
+              Anthropic, а в локальный LiteLLM, который переводит их в DeepSeek.
+              Плюс <code>zim-memory</code> — поиск по заметкам и прошлым сессиям.
+            </td>
+            <td class="num">всегда</td>
+          </tr>
+          <tr>
+            <td>браузер</td>
+            <td>
+              Open WebUI как веб-чат и cptr — агент с доступом к диску, которого
+              можно дёргать из браузера. Веб-поиск через локальный SearxNG.
+            </td>
+            <td class="num">по желанию</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Установка</h2>
+    <p>
+      Один скрипт ставит всё: пакеты, Docker, Claude Code, zim-claude, твои
+      доработки, SearxNG, cptr и Open WebUI. Он же создаёт ключи — токен
+      Token Juice берётся из репозитория zim-claude, а ключ доступа Open WebUI
+      к агенту генерируется свой.
+    </p>
+
+    <div class="step">
+      <div class="rail">01</div>
+      <div class="body">
+        <h3>Разрешить WSL и systemd <span class="chip">Windows</span></h3>
+        <p class="note">
+          В Windows PowerShell от администратора. Если WSL уже стоит — пропусти.
+        </p>
+        <div class="cmd"><button class="copy" type="button">копировать</button><pre><code>wsl --install -d Ubuntu</code></pre></div>
+        <p>Внутри Ubuntu включи systemd — без него не поднимется Docker:</p>
+        <div class="cmd"><button class="copy" type="button">копировать</button><pre><code>sudo tee /etc/wsl.conf &gt;/dev/null &lt;&lt;'EOF'
+[boot]
+systemd=true
+EOF</code></pre></div>
+        <p class="note">
+          Потом в Windows выполни <code>wsl --shutdown</code> и зайди в Ubuntu
+          заново.
+        </p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="rail">02</div>
+      <div class="body">
+        <h3>Забрать файлы <span class="chip">WSL</span></h3>
+        <p>
+          Все файлы установки лежат в одном архиве. Скачай его и распакуй —
+          дальше всё делает скрипт внутри.
+        </p>
+        <div class="cmd"><button class="copy" type="button">копировать</button><pre><code>cd ~
+tar xzf zim-claude-friend.tar.gz
+cd zim-claude-friend</code></pre></div>
+        <p class="note">
+          Архив передай любым способом: через мессенджер, облако или флешку.
+          Размер 41 КБ.
+        </p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="rail">03</div>
+      <div class="body">
+        <h3>Запустить установку <span class="chip">WSL</span></h3>
+        <p>
+          Одна команда. Скрипт сам поймёт, что уже установлено, и спросит
+          пароль от системы только когда понадобится ставить пакеты.
+        </p>
+        <div class="cmd"><button class="copy" type="button">копировать</button><pre><code>./install-friend.sh</code></pre></div>
+        <div class="callout ok">
+          <strong>Скрипт можно запускать сколько угодно раз</strong>
+          <p>
+            Он ничего не ломает повторным запуском: уже сделанное пропускает.
+            Если чего-то не хватает — скажет, чего именно, и попросит запустить
+            себя снова.
+          </p>
+        </div>
+        <p class="note">
+          Первый запуск может прерваться дважды, и это нормально: после
+          установки Docker нужно закрыть и заново открыть терминал, чтобы
+          применились права. Скрипт прямо об этом скажет.
+        </p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="rail">04</div>
+      <div class="body">
+        <h3>Зарегистрироваться в cptr <span class="chip">браузер</span></h3>
+        <p>
+          Единственный шаг, который нельзя автоматизировать. Скрипт сам
+          напечатает ссылку с одноразовым токеном — открой её и придумай логин
+          с паролем.
+        </p>
+        <p class="note">
+          Логин и пароль локальные: это вход в программу на своём компьютере,
+          никуда они не отправляются. После регистрации запусти
+          <code>./install-friend.sh</code> ещё раз — скрипт доделает остальное:
+          настроит агента и поднимет Open WebUI.
+        </p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="rail">05</div>
+      <div class="body">
+        <h3>Готово <span class="chip">WSL</span></h3>
+        <p>Проверить, что всё живо:</p>
+        <div class="cmd"><button class="copy" type="button">копировать</button><pre><code>zim-claude</code></pre></div>
+        <p>
+          Внутри спроси что-нибудь простое. Если ответил — работает. Дальше:
+        </p>
+        <div class="scroll">
+          <table>
+            <tbody>
+              <tr><td>zim-claude</td><td>терминальный Claude Code</td></tr>
+              <tr><td>127.0.0.1:3000</td><td>чат в браузере</td></tr>
+              <tr><td>zim-memory search "…"</td><td>поиск по заметкам и истории</td></tr>
+              <tr><td>~/start-all.sh</td><td>поднять всё сразу после перезагрузки</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Порты</h2>
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr><th>Порт</th><th>Что</th><th>Доступ</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>4000</td><td>LiteLLM для CLI</td><td>локально</td></tr>
+          <tr><td>4002</td><td>LiteLLM для Claude Desktop и агента cptr</td><td>локально</td></tr>
+          <tr><td>8100</td><td>cptr — веб-интерфейс агента</td><td>только 127.0.0.1</td></tr>
+          <tr><td>8888</td><td>SearxNG</td><td>только 127.0.0.1</td></tr>
+          <tr><td>3000</td><td>Open WebUI</td><td>все интерфейсы</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">
+      Порт 3000 исключение: контейнер запущен с <code>--network host</code>,
+      поэтому если WSL пробрасывает порты на Windows, чат виден любому в
+      локальной сети. Закрыть можно, но тогда Open WebUI не достучится до
+      SearxNG и cptr по <code>127.0.0.1</code> — понадобятся другие адреса,
+      так что просто поменять флаг нельзя.
+    </p>
+  </section>
+
+  <section>
+    <h2>Что может сломаться</h2>
+    <ul>
+      <li>
+        <strong>Обновление cptr затирает патчи.</strong> После
+        <code>pip install -U cptr</code> повтори команды <code>patch</code> из
+        установщика. Версия 0.9.21 зафиксирована именно поэтому.
+      </li>
+      <li>
+        <strong>Веб-поиск молча деградирует</strong> до коротких сниппетов, если
+        в контейнере Open WebUI нет <code>ENABLE_LOCAL_WEB_FETCH</code>. Поэтому
+        контейнер поднимается только через <code>run-openwebui.sh</code>, а не
+        руками.
+      </li>
+      <li>
+        <strong>Чаты без названий и без follow-up кнопок.</strong> Известная
+        нерешённая проблема: cptr отвечает <code>503</code> на служебные задачи
+        вроде генерации заголовка. Основной чат при этом работает.
+      </li>
+      <li>
+        <strong>Имя модели обманчиво.</strong> <code>claude-opus-5-5</code> — это
+        псевдоним DeepSeek. Claude Desktop показывает его как модель уровня Opus
+        только потому, что иначе отказывается показывать не-Anthropic модели.
+      </li>
+      <li>
+        <strong>Окно контекста 262144, а не миллион.</strong> Столько режет
+        апстрим; значение прописано и в env-профиле CLI, и в конфиге cptr.
+        Менять его на большее смысла нет — запрос упадёт на стороне апстрима.
+      </li>
+    </ul>
+  </section>
+
+</div>
+
+<script>
+  document.addEventListener('click', async (event) => {
+    const button = event.target.closest('.copy');
+    if (!button) return;
+    const code = button.parentElement.querySelector('code');
+    if (!code) return;
+    const text = code.innerText;
+    const restore = () => { button.textContent = 'копировать'; };
+    try {
+      await navigator.clipboard.writeText(text);
+      button.textContent = 'скопировано';
+    } catch (error) {
+      // Буфер обмена может быть недоступен — тогда хотя бы выделяем текст,
+      // чтобы его можно было скопировать вручную.
+      try {
+        const range = document.createRange();
+        range.selectNodeContents(code);
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+        button.textContent = 'выделено';
+      } catch (fallbackError) {
+        button.textContent = 'не вышло';
+      }
+    }
+    setTimeout(restore, 1600);
+  });
+</script>

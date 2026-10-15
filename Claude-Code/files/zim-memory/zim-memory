@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# zim-memory — поиск по заметкам и истории сессий Claude Code.
+#
+#   zim-memory search "запрос"     найти
+#   zim-memory index               доиндексировать изменившееся
+#   zim-memory stats               что в индексе
+#
+# Индекс: SQLite + FTS5, база ~/.claude/zim-memory/memory.db
+# Реализация: ~/.claude/zim-memory/index.py
+#
+# python3 -I: не подхватывать site-packages и не смотреть в cwd — иначе
+# посторонний json.py в текущем каталоге может перехватить импорт.
+
+set -euo pipefail
+
+PY="${ZIM_MEMORY_PYTHON:-python3}"
+SCRIPT="$HOME/.claude/zim-memory/index.py"
+
+[[ -f "$SCRIPT" ]] || { echo "zim-memory: нет $SCRIPT" >&2; exit 1; }
+
+exec "$PY" -I "$SCRIPT" "$@"

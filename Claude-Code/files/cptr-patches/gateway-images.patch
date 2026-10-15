@@ -1,0 +1,276 @@
+--- a/routers/gateway.py
++++ b/routers/gateway.py
+@@ -17,13 +17,17 @@
+ from __future__ import annotations
+ 
+ import asyncio
++import base64
++import binascii
+ import hashlib
+ import json
+ import logging
++import re
+ import secrets
+ import time
+ import uuid
+ from pathlib import Path
++from urllib.parse import urlparse
+ 
+ from fastapi import APIRouter, HTTPException, Request
+ from fastapi.responses import StreamingResponse
+@@ -33,6 +37,7 @@
+ from cptr.models.workspaces import Workspace
+ from cptr.utils.agents.prompts import message_text
+ from cptr.utils.config import now_ms
++from cptr.utils.storage import get_storage
+ 
+ logger = logging.getLogger(__name__)
+ 
+@@ -189,6 +194,7 @@
+         chat_id=chat_id,
+         model_id=model_id,
+         messages=body.messages,
++        body=body,
+     )
+ 
+     await Chat.update_current_message(chat_id, assistant_msg.id, now_ms())
+@@ -245,6 +251,190 @@
+         }
+ 
+ 
++# ── Incoming image attachments ───────────────────────────────
++
++_DATA_URI_RE = re.compile(r"^data:(?P<mime>[^;,]+)?(?P<params>(?:;[^;,]+)*),(?P<payload>.*)$", re.S)
++_IMAGE_MIME_BY_EXT = {
++    ".png": "image/png",
++    ".jpg": "image/jpeg",
++    ".jpeg": "image/jpeg",
++    ".gif": "image/gif",
++    ".webp": "image/webp",
++    ".bmp": "image/bmp",
++    ".tif": "image/tiff",
++    ".tiff": "image/tiff",
++    ".heic": "image/heic",
++    ".avif": "image/avif",
++}
++_MAX_IMAGE_BYTES = 20 * 1024 * 1024
++_IMAGE_FETCH_TIMEOUT_S = 30
++
++
++def _extract_image_blocks(message: dict | None) -> list[dict]:
++    """Collect OpenAI-style image_url blocks from a chat message.
++
++    Handles the two shapes OWUI sends: a ``content`` list of blocks, and the
++    legacy single ``{"type": "image_url"}`` block.
++    """
++    if not isinstance(message, dict):
++        return []
++    content = message.get("content")
++    if not isinstance(content, list):
++        return []
++    blocks = []
++    for block in content:
++        if not isinstance(block, dict) or block.get("type") != "image_url":
++            continue
++        image_url = block.get("image_url")
++        if isinstance(image_url, dict):
++            url = image_url.get("url")
++        else:
++            url = image_url
++        if isinstance(url, str) and url.strip():
++            blocks.append({"url": url.strip()})
++    return blocks
++
++
++async def _decode_image_url(url: str) -> tuple[bytes, str] | None:
++    """Turn an image_url value into (bytes, content_type).
++
++    Supports inline ``data:image/...;base64,...`` URIs and plain http(s) URLs
++    (downloaded here, since the agent backend has no way to fetch them).
++    Returns None when the value cannot be turned into bytes.
++    """
++    match = _DATA_URI_RE.match(url)
++    if match:
++        mime = (match.group("mime") or "image/png").strip().lower()
++        params = (match.group("params") or "").lower()
++        payload = match.group("payload").strip()
++        try:
++            if "base64" in params:
++                data = base64.b64decode(payload, validate=False)
++            else:
++                from urllib.parse import unquote_to_bytes
++
++                data = unquote_to_bytes(payload)
++        except (binascii.Error, ValueError) as exc:
++            logger.warning("[attachments] Could not decode inline image data URI: %s", exc)
++            return None
++        if not data:
++            logger.warning("[attachments] Inline image data URI decoded to 0 bytes")
++            return None
++        if len(data) > _MAX_IMAGE_BYTES:
++            logger.warning("[attachments] Inline image too large (%d bytes), skipping", len(data))
++            return None
++        if not mime.startswith("image/"):
++            mime = "image/png"
++        return data, mime
++
++    parsed = urlparse(url)
++    if parsed.scheme not in ("http", "https"):
++        logger.warning("[attachments] Unsupported image_url scheme: %r", url[:80])
++        return None
++    try:
++        import httpx
++
++        async with httpx.AsyncClient(
++            timeout=_IMAGE_FETCH_TIMEOUT_S, follow_redirects=True
++        ) as client:
++            response = await client.get(url)
++            response.raise_for_status()
++            data = response.content
++            header_type = response.headers.get("content-type") or ""
++    except Exception as exc:
++        logger.warning("[attachments] Could not download image_url %s: %s", url[:120], exc)
++        return None
++    if not data:
++        logger.warning("[attachments] Downloaded image is empty: %s", url[:120])
++        return None
++    if len(data) > _MAX_IMAGE_BYTES:
++        logger.warning("[attachments] Downloaded image too large (%d bytes), skipping", len(data))
++        return None
++    content_type = header_type.split(";")[0].strip().lower()
++    if not content_type.startswith("image/"):
++        ext = Path(parsed.path).suffix.lower()
++        content_type = _IMAGE_MIME_BY_EXT.get(ext, "image/png")
++    return data, content_type
++
++
++def _guess_image_name(url: str, content_type: str, index: int) -> str:
++    """Best-effort filename for a stored image."""
++    parsed = urlparse(url)
++    # A data: URI has no filename to borrow, so fall back to a generic one.
++    path = parsed.path if parsed.scheme in ("http", "https") else ""
++    name = Path(path).name if path else ""
++    if not name or "." not in name:
++        ext = next((e for e, m in _IMAGE_MIME_BY_EXT.items() if m == content_type), ".png")
++        name = f"image-{index + 1}{ext}"
++    return name
++
++
++async def _stage_incoming_images(blocks: list[dict]) -> list[dict]:
++    """Persist incoming image blocks to storage and return ChatMessage meta files.
++
++    The downstream pipeline (prepare_agent_attachments → storage.get) needs the
++    bytes to live under the storage key, so each image is written before the
++    message row references it. A broken image is logged and skipped — the text
++    of the message must survive.
++    """
++    files: list[dict] = []
++    storage = get_storage()
++    for index, block in enumerate(blocks):
++        url = block["url"]
++        decoded = await _decode_image_url(url)
++        if decoded is None:
++            continue
++        data, content_type = decoded
++        name = _guess_image_name(url, content_type, index)
++        file_id = str(uuid.uuid4())
++        try:
++            await storage.put(file_id, data)
++        except Exception as exc:
++            logger.warning("[attachments] Could not store image %s: %s", name, exc)
++            continue
++        files.append(
++            {
++                "id": file_id,
++                "name": name,
++                "type": "image",
++                "content_type": content_type,
++                "size": len(data),
++            }
++        )
++    if files:
++        logger.info(
++            "[attachments] Staged %d incoming image(s) for the agent: %s",
++            len(files),
++            ", ".join(f["name"] for f in files),
++        )
++    return files
++
++
++def _normalize_owui_files(raw: object) -> list[dict]:
++    """Accept the file entries OWUI puts on body.user_message, when present."""
++    if not isinstance(raw, list):
++        return []
++    files = []
++    for item in raw:
++        if not isinstance(item, dict):
++            continue
++        file_id = item.get("id") or item.get("file_id")
++        if not isinstance(file_id, str) or not file_id:
++            continue
++        entry = {
++            "id": file_id,
++            "name": str(item.get("name") or item.get("filename") or file_id),
++            "type": str(item.get("type") or ""),
++        }
++        content_type = item.get("content_type") or item.get("mime_type")
++        if content_type:
++            entry["content_type"] = str(content_type)
++        if isinstance(item.get("size"), int):
++            entry["size"] = item["size"]
++        files.append(entry)
++    return files
++
++
+ # ── Message tree resolution ──────────────────────────────────
+ 
+ 
+@@ -253,6 +443,7 @@
+     chat_id: str,
+     model_id: str,
+     messages: list[dict],
++    body: ChatCompletionRequest | None = None,
+ ) -> tuple:
+     """Create user + assistant messages with proper tree structure.
+ 
+@@ -280,6 +471,7 @@
+ 
+     # Extract user content
+     user_content = ""
++    last_user = None
+     if messages:
+         last_user = next(
+             (m for m in reversed(messages) if m.get("role") == "user"),
+@@ -287,6 +479,24 @@
+         )
+         user_content = message_text(last_user).strip() if last_user else ""
+ 
++    # Attachments: OWUI sends images as image_url blocks (inline base64 data URI
++    # after its own middleware conversion, or a plain URL). message_text() keeps
++    # only text blocks, so the images have to be lifted out here and staged into
++    # storage — the chat_task pipeline reads them back from the message meta.
++    user_files = await _stage_incoming_images(_extract_image_blocks(last_user))
++    if user_files:
++        logger.info("[attachments] Source: request messages (image_url blocks)")
++    else:
++        owui_files = _normalize_owui_files(
++            (body.user_message or {}).get("files") if isinstance(body.user_message, dict) else None
++        )
++        if owui_files:
++            user_files = owui_files
++            logger.info(
++                "[attachments] Source: body.user_message.files (%d entr(ies))", len(owui_files)
++            )
++    user_meta = {"files": user_files} if user_files else None
++
+     # Determine parent for the user message
+     cptr_parent_id = chat.current_message_id if chat else None
+ 
+@@ -358,6 +568,7 @@
+         content=user_content,
+         parent_id=cptr_parent_id,
+         created_at=now_ms(),
++        meta=user_meta,
+     )
+ 
+     # Create assistant message

@@ -1,0 +1,29 @@
+# SearxNG для zim-claude: локальный веб-поиск без API-ключей.
+#
+# Зачем: апстрим (Token Juice / DeepSeek) не поддерживает серверный
+# веб-поиск, поэтому Claude Code получал 400 на инструмент web_search.
+# LiteLLM перехватывает этот инструмент и выполняет поиск сам — здесь.
+#
+# Ключевое здесь — formats: json. Без него SearxNG отдаёт 403 на
+# ?format=json, и LiteLLM получает пустую выдачу.
+use_default_settings: true
+
+server:
+  # Локальный инстанс, наружу не смотрит. Значение не секрет,
+  # но и не должно быть дефолтным — SearxNG ругается на дефолт.
+  secret_key: "zim-claude-local-searxng-change-me"
+  # limiter выключаем: он банит автоматические запросы от LiteLLM.
+  limiter: false
+  public_instance: false
+  image_proxy: false
+  bind_address: "0.0.0.0:8080"
+
+search:
+  safe_search: 0
+  autocomplete: ""
+  formats:
+    - html
+    - json
+
+ui:
+  static_use_hash: true
