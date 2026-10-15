@@ -22,6 +22,8 @@
 - <img src="https://raw.githubusercontent.com/riyasy/FlyPhotos/main/Src/FlyPhotos/Assets/Square44x44Logo.targetsize-256.png" width="16"> **[Fly Photos](https://github.com/riyasy/FlyPhotos/releases)** — просмотр фото, замена Picasa Photo Viewer
 - <img src="https://www.google.com/s2/favicons?domain=losslesscut.app&sz=64" width="16"> **[LosslessCut](https://github.com/mifi/lossless-cut/releases)** — быстрая обрезка видео
 - <img src="https://www.google.com/s2/favicons?domain=qbittorrent.org&sz=64" width="16"> **[qBittorrent](https://www.qbittorrent.org/download)** — торрент-клиент
+- <img src="https://www.google.com/s2/favicons?domain=sourceforge.net&sz=64" width="16"> **[Equalizer APO](https://sourceforge.net/projects/equalizerapo/)** — системный эквалайзер
+- <img src="https://a.fsdn.com/allura/p/peace-equalizer-apo-extension/icon" width="16"> **[Peace](https://sourceforge.net/projects/peace-equalizer-apo-extension/)** — графическая оболочка к нему: пресеты, AutoEQ
 
 ## Редакторы
 
