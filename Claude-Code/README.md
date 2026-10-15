@@ -56,6 +56,22 @@ cptr и Open WebUI. Можно запускать повторно — уже с
 
 ## Если что-то не так
 
+**`Package 'docker.io' has no installation candidate`.** Скрипт лечит сам:
+включает компонент `universe` и пробует снова. Если не помогло вручную:
+
+```bash
+sudo add-apt-repository -y universe && sudo apt update
+sudo apt install -y docker.io
+```
+
+**Не качается Claude Code.** Соединение с `downloads.claude.ai` не проходит —
+обычно из-за VPN или прокси. Скрипт сам пробует запасной путь через npm и
+печатает, что делать. Вручную:
+
+```bash
+curl -I --max-time 10 https://claude.ai/install.sh   # ждём 302
+```
+
 **`zim-claude` не найден.** Открой новый терминал — путь
 `~/.local/bin` подхватывается из `~/.zshrc` или `~/.bashrc`.
 
