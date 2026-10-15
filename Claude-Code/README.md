@@ -73,7 +73,20 @@ curl -I --max-time 10 https://claude.ai/install.sh   # ждём 302
 ```
 
 **`zim-claude` не найден.** Открой новый терминал — путь
-`~/.local/bin` подхватывается из `~/.zshrc` или `~/.bashrc`.
+`~/.local/bin` подхватывается из `~/.zshrc` или `~/.bashrc`. Скрипт установки
+добавляет его себе сам, так что при повторном запуске проблема не возникает.
+
+**SearxNG не запускается.** Образ весит ~380 МБ и качается один раз. Если
+скачать не вышло, скрипт скажет об этом и покажет ошибку докера. Вручную:
+
+```bash
+docker pull searxng/searxng:latest
+docker run -d --name searxng --restart unless-stopped \
+  -p 127.0.0.1:8888:8080 \
+  -v ~/.config/zim-claude/searxng/settings.yml:/etc/searxng/settings.yml:ro \
+  searxng/searxng:latest
+docker logs searxng          # если не поднялся
+```
 
 **Прокси не отвечает.**
 
