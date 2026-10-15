@@ -9,7 +9,7 @@
 Открой PowerShell (Win+X → «Терминал») и вставь:
 
 ```powershell
-irm "https://raw.githubusercontent.com/Hayden-Wright/setup/main/%D0%9A%D0%BE%D0%BD%D1%84%D0%B8%D0%B3%D0%B8/Sublime%20Text/install.ps1" -OutFile $env:TEMP\sublime-setup.ps1; & $env:TEMP\sublime-setup.ps1
+irm "https://raw.githubusercontent.com/Hayden-Wright/Setup/main/%D0%9A%D0%BE%D0%BD%D1%84%D0%B8%D0%B3%D0%B8/Sublime%20Text/install.ps1" -OutFile $env:TEMP\sublime-setup.ps1; & $env:TEMP\sublime-setup.ps1
 ```
 
 Больше ничего делать не нужно: скрипт сам поставит Sublime Text (если его нет),
