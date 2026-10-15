@@ -1,5 +1,3 @@
-# Windows Terminal
-
 Тема Catppuccin Mocha, шрифт JetBrainsMono Nerd Font, прозрачность 80%,
 при запуске — Fastfetch с ASCII-артом.
 

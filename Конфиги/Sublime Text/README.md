@@ -1,5 +1,3 @@
-# Sublime Text
-
 Тема Aura (soft), шрифт Consolas 10, подсветка Markdown.
 
 ![](screenshot.png)

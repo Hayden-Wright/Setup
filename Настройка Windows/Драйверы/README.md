@@ -1,4 +1,3 @@
-
 ## Видеокарта
 
 - <img src="https://www.google.com/s2/favicons?domain=amd.com&sz=64" width="16"> **[AMD](https://www.amd.com/en/support/download/drivers.html)**
