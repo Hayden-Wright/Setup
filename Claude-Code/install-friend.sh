@@ -219,6 +219,20 @@ else
   ok "zim-claude установлен"
 fi
 
+# Запускаем оба прокси СРАЗУ после установки. Без этого:
+#   :4000 — терминал зависает на «Handling...», потому что claude стучится
+#           в прокси, которого нет (zim-claude поднял бы его сам, но только
+#           если конфиг уже на месте — а доработки кладутся следующим шагом);
+#   :4002 — агент cptr в Open WebUI получает 400 на каждую модель.
+have "поднимаю прокси :4000 (для терминала)"
+"$HOME/.local/bin/start-litellm.sh" restart 2>&1 | tail -2 | sed 's/^/      /'
+
+if [[ -x "$ZIM_DIR/claude-desktop-integration/start-desktop-proxy.sh" ]]; then
+  have "поднимаю прокси :4002 (для агента cptr)"
+  ( cd "$ZIM_DIR/claude-desktop-integration" && ./start-desktop-proxy.sh restart ) \
+    2>&1 | tail -2 | sed 's/^/      /'
+fi
+
 # ── 5. доработки ─────────────────────────────────────────────────────────────
 
 step "5/8  Доработки (веб-поиск, zim-memory, конфиги)"
@@ -227,6 +241,17 @@ step "5/8  Доработки (веб-поиск, zim-memory, конфиги)"
 if (( PIPESTATUS[0] != 0 )); then
   fail "deploy.sh завершился с ошибкой — смотри вывод выше"
   exit 1
+fi
+
+# deploy.sh заменил ~/litellm-config.yaml (добавил перехват веб-поиска), но
+# уже запущенный прокси держит в памяти СТАРЫЙ конфиг. Без перезапуска
+# веб-поиск не заработает: LiteLLM продолжит отдавать 400 на web_search.
+# Перезапускаем ПОСЛЕ доработок — на шаге 4 конфиг был ещё исходный.
+have "перезапускаю прокси, чтобы подхватил новый конфиг"
+"$HOME/.local/bin/start-litellm.sh" restart 2>&1 | tail -1 | sed 's/^/      /'
+if [[ -x "$ZIM_DIR/claude-desktop-integration/start-desktop-proxy.sh" ]]; then
+  ( cd "$ZIM_DIR/claude-desktop-integration" && ./start-desktop-proxy.sh restart ) \
+    2>&1 | tail -1 | sed 's/^/      /'
 fi
 
 # PATH для zsh: install.sh прописывает только ~/.bashrc, а оболочка по
@@ -516,6 +541,73 @@ else
     exit 1
   fi
   ok "запущен"
+fi
+
+# Ждём, пока контейнер поднимется, и ДОписываем настройки в его базу.
+#
+# Почему в базу, а не только в env: Open WebUI с ENABLE_PERSISTENT_CONFIG=true
+# (значение по умолчанию) хранит провайдеров в своей webui.db и читает env
+# только при ПЕРВОМ старте на пустой базе. Если контейнер уже создавался —
+# например, при повторном запуске скрипта — ключ и адрес из env игнорируются,
+# и в пикере моделей остаётся «No models available».
+have "проверяю настройки в базе Open WebUI"
+
+WEBUI_SETTINGS_RC=0
+for _ in $(seq 1 30); do
+  if docker exec open-webui python -c 'import sqlite3' >/dev/null 2>&1; then
+    WEBUI_SETTINGS_RC=1
+    break
+  fi
+  sleep 2
+done
+
+if (( WEBUI_SETTINGS_RC )); then
+  docker exec -i open-webui python - "$KEY" <<'PY' 2>&1 | sed 's/^/      /'
+import json, os, sqlite3, sys
+
+# Ключ передаём аргументом, а если он пуст (создать не удалось) — берём из env
+# контейнера, чтобы не затереть уже рабочее значение пустым.
+key = sys.argv[1] if len(sys.argv) > 1 and sys.argv[1] else os.environ.get("OPENAI_API_KEY", "")
+base = os.environ.get("OPENAI_API_BASE_URL", "http://127.0.0.1:8100/v1")
+
+con = sqlite3.connect("/app/backend/data/webui.db")
+now = __import__("time").time()
+
+rows = {
+    "openai.enable": json.dumps(True),
+    "openai.api_base_urls": json.dumps([base]),
+    "openai.api_keys": json.dumps([key] if key else []),
+    # Заголовки нужны cptr, чтобы связать ветки чата Open WebUI с сессией агента.
+    "openai.api_configs": json.dumps({"0": {
+        "enable": True, "tags": [], "prefix_id": "", "model_ids": [],
+        "connection_type": "local", "auth_type": "bearer",
+        "headers": {
+            "X-OpenWebUI-User-Name": "{{USER_NAME}}",
+            "X-OpenWebUI-User-Id": "{{USER_ID}}",
+            "X-OpenWebUI-User-Email": "{{USER_EMAIL}}",
+            "X-OpenWebUI-Chat-Id": "{{CHAT_ID}}",
+            "X-OpenWebUI-Message-Id": "{{MESSAGE_ID}}",
+            "X-OpenWebUI-Task": "{{TASK}}",
+        },
+    }}),
+}
+
+for k, v in rows.items():
+    con.execute(
+        "INSERT INTO config (key, value, updated_at) VALUES (?, ?, ?) "
+        "ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at",
+        (k, v, now),
+    )
+    print(f"  ✓ {k}")
+con.commit()
+PY
+
+  # Контейнер держит настройки в памяти — перезапуск, чтобы прочитал новые.
+  docker restart open-webui >/dev/null 2>&1
+  have "контейнер перезапущен с новыми настройками"
+else
+  warn "не удалось заглянуть в базу Open WebUI"
+  todo "проверить настройки Open WebUI вручную (Настройки → Подключения)"
 fi
 
 # ── итог ─────────────────────────────────────────────────────────────────────
