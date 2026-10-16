@@ -11,26 +11,30 @@
 Set-ExecutionPolicy Bypass -Scope Process -Force; irm "https://raw.githubusercontent.com/Hayden-Wright/Setup/main/Configs/Windows-Terminal/install.ps1" -OutFile $env:TEMP\wt-setup.ps1; & $env:TEMP\wt-setup.ps1
 ```
 
-Первая часть (`Set-ExecutionPolicy ... -Scope Process`) нужна на свежей
-Windows: там политика `Restricted`, и без неё запуск скрипта падает с
-«выполнение сценариев отключено в этой системе». `-Scope Process` действует
-только внутри этого окна PowerShell и ничего в системе не меняет — закроешь
-окно, и всё как было.
+Первая часть (`Set-ExecutionPolicy ... -Scope Process`) нужна, чтобы вообще
+запустить эту команду на свежей Windows: там политика `Restricted`, и без неё
+скрипт не загрузится. `-Scope Process` действует только внутри этого окна и
+ничего в системе не меняет.
 
-Больше ничего делать не нужно: скрипт сам поставит всё, что нужно, сделает
-бэкапы и положит настройки. В конце напишет `Готово.`
+Дальше скрипт сам поставит `RemoteSigned` для твоего пользователя — иначе
+PowerShell будет ругаться на профиль в каждом новом окне. Больше ничего делать
+не нужно: скрипт поставит всё, что нужно, сделает бэкапы и положит настройки.
+В конце напишет `Готово.`
 
 ## Что именно он делает
 
-1. **Ищет Windows Terminal.** Если не находит — ставит через `winget`.
-2. **Ищет шрифт** `JetBrainsMono Nerd Font` в реестре. Если нет — ставит
+1. **Ставит политику выполнения** `RemoteSigned` для текущего пользователя, если
+   сейчас стоит `Restricted`. Иначе PowerShell отказывается грузить профиль, и
+   в каждом новом окне вылезает «выполнение сценариев отключено».
+2. **Ищет Windows Terminal.** Если не находит — ставит через `winget`.
+3. **Ищет шрифт** `JetBrainsMono Nerd Font` в реестре. Если нет — ставит
    пакет `DEVCOM.JetBrainsMonoNerdFont` через `winget`.
-3. **Ищет Fastfetch.** Если нет — ставит пакет `Fastfetch-cli.Fastfetch`.
-4. **Кладёт конфиг Fastfetch** и ASCII-арт в `%USERPROFILE%\.config\fastfetch`.
+4. **Ищет Fastfetch.** Если нет — ставит пакет `Fastfetch-cli.Fastfetch`.
+5. **Кладёт конфиг Fastfetch** и ASCII-арт в `%USERPROFILE%\.config\fastfetch`.
    Прежние файлы, если были, сохраняются с меткой времени.
-5. **Дописывает блок в профиль PowerShell** — в тот, который уже есть на
+6. **Дописывает блок в профиль PowerShell** — в тот, который уже есть на
    машине (см. ниже).
-6. **Делает бэкап** текущего `settings.json` рядом с ним:
+7. **Делает бэкап** текущего `settings.json` рядом с ним:
    `settings_backup_ГГГГ-ММ-ДД_ЧЧ-ММ-СС.json` — и кладёт свои настройки:
    тема Catppuccin Mocha, прозрачность 80%, шрифт, горячие клавиши.
 
@@ -74,16 +78,17 @@ Windows: там политика `Restricted`, и без неё запуск с�
 PowerShell: Win+X → «Терминал», или `Win+R` → `powershell`.
 
 **«выполнение сценариев отключено в этой системе».**
-Так и должно быть на свежей Windows — политика там `Restricted`. Команда в
-разделе «Установка» уже снимает это на время работы окна. Если запускаешь
-скрипт иначе, добавь перед ним:
+Так и должно быть на свежей Windows — политика там `Restricted`. Скрипт
+ставит `RemoteSigned` сам (шаг 1), права администратора для этого не нужны.
+
+Вручную то же самое:
 
 ```powershell
-Set-ExecutionPolicy Bypass -Scope Process -Force
+Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
 ```
 
-Это действует только внутри текущего окна PowerShell: закроешь его — политика
-вернётся к прежней. Менять настройку навсегда (`-Scope CurrentUser`) не нужно.
+`-Scope CurrentUser` меняет политику только для твоего пользователя и не
+требует админа. Вернуть как было: `Set-ExecutionPolicy Restricted -Scope CurrentUser`.
 
 **Шрифт поставился, но Terminal его не видит.**
 Шрифты подхватываются при запуске приложений. Полностью закрой Terminal
@@ -115,7 +120,8 @@ Select-String -Path $PROFILE -Pattern 'Setup: fastfetch'   # дописан ли
 `settings.json` рядом с ним. Профиль PowerShell — так же, из
 `profile.ps1.backup_...`. Конфиг Fastfetch можно просто удалить: папку
 `.config\fastfetch` и блок между метками `# >>> Setup: fastfetch >>>`
-и `# <<< Setup: fastfetch <<<` в профиле.
+и `# <<< Setup: fastfetch <<<` в профиле. Политику выполнения — если ставил
+её не ты: `Set-ExecutionPolicy Restricted -Scope CurrentUser`.
 
 ## Установка из клона репозитория
 

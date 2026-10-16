@@ -111,6 +111,36 @@ else
   exit 0
 fi
 
+# start-all.sh поднимает Docker командой `sudo service docker start`, и без
+# правила sudoers она спрашивает пароль при КАЖДОМ запуске. Правило — только
+# на эту одну команду, ничего больше оно не разрешает.
+#
+# Проверяем именно наличие правила, а не `sudo -n service docker status`:
+# та команда возвращает ошибку и когда Docker просто остановлен, и скрипт
+# решил бы, что правила нет, и полез бы писать его повторно.
+SUDOERS=/etc/sudoers.d/docker-service
+if sudo -n -l 2>/dev/null | grep -q 'NOPASSWD.*service docker'; then
+  have "Docker стартует без пароля"
+else
+  SERVICE_BIN="$(command -v service || echo /usr/sbin/service)"
+  have "разрешаю запуск Docker без пароля (только «service docker»)"
+  # Через visudo -cf: битый файл в sudoers.d ломает sudo целиком, поэтому
+  # сначала проверяем синтаксис на временном файле и только потом кладём.
+  # Проверка идёт БЕЗ sudo: visudo -cf читает файл и root для этого не нужен,
+  # а с sudo она молча провалилась бы, если пароль уже спрошен.
+  SUDOERS_TMP="$(mktemp)"
+  printf '%s ALL=(ALL) NOPASSWD: %s docker *\n' "$USER" "$SERVICE_BIN" >"$SUDOERS_TMP"
+  if visudo -cf "$SUDOERS_TMP" >/dev/null 2>&1; then
+    sudo install -m 0440 -o root -g root "$SUDOERS_TMP" "$SUDOERS"
+    ok "правило добавлено: $SUDOERS"
+  else
+    warn "правило не прошло проверку синтаксиса — sudoers не трогаю"
+    warn "start-all.sh будет спрашивать пароль; можно убрать sudo из строки"
+    warn "«sudo service docker start» в ~/start-all.sh — Docker и так стартует"
+  fi
+  rm -f "$SUDOERS_TMP"
+fi
+
 # ── 3. Claude Code ───────────────────────────────────────────────────────────
 
 step "3/8  Claude Code"
@@ -167,6 +197,51 @@ EOF
     exit 1
   fi
 fi
+
+# Диалог «Do you trust the files in this folder?» при каждом запуске. Claude
+# Code хранит ответ в ~/.claude.json, в projects[<каталог>].hasTrustDialogAccepted,
+# и спрашивает заново, пока ключа нет. Доверие наследуется вложенными
+# каталогами, поэтому одной записи на $HOME хватает на всё внутри — и на
+# терминал, и на агента cptr, который стартует в воркспейсе.
+#
+# --dangerously-skip-permissions этот диалог НЕ снимает (проверено): флаг
+# отвечает за права на инструменты, а не за доверие к папке.
+have "снимаю запрос доверия к папке"
+python3 -I - "$HOME" <<'PY'
+import json, pathlib, sys
+
+home = pathlib.Path(sys.argv[1])
+path = home / ".claude.json"
+
+try:
+    data = json.loads(path.read_text()) if path.exists() else {}
+except ValueError:
+    # Битый файл не трогаем: Claude Code пересоздаст его сам, а затирать
+    # чужую историю сессий ради одной строки не стоит.
+    print("  ! ~/.claude.json не читается — пропускаю, доверие спросят один раз")
+    raise SystemExit(0)
+
+if not isinstance(data, dict):
+    raise SystemExit(0)
+
+projects = data.get("projects")
+if not isinstance(projects, dict):
+    # Ключа нет или он не тот, чем кажется — заводим свой, чужое не трогаем.
+    projects = {}
+    data["projects"] = projects
+
+entry = projects.get(str(home))
+if not isinstance(entry, dict):
+    entry = {}
+    projects[str(home)] = entry
+
+if entry.get("hasTrustDialogAccepted") is True:
+    print(f"  · доверие уже стоит: {home}")
+else:
+    entry["hasTrustDialogAccepted"] = True
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n")
+    print(f"  ✓ доверие записано: {home}")
+PY
 
 # ── 4. zim-claude ────────────────────────────────────────────────────────────
 
@@ -369,12 +444,24 @@ CPTR_PY="$CPTR_VENV/bin/python"
 if [[ -x "$CPTR_VENV/bin/cptr" ]]; then
   have "уже установлен"
 else
+  # [agents] обязателен: поддержка Claude Code у cptr — опциональная
+  # зависимость (claude-agent-sdk). Без неё профиль агента получает статус
+  # missing_dependency, gateway.model из setup-cptr.sh не разрешается, и чат
+  # отвечает 503 No API model connections configured.
   have "ставлю cptr 0.9.21 (версия зафиксирована — под неё написаны патчи)"
   python3 -m venv "$CPTR_VENV" || { fail "не удалось создать venv"; exit 1; }
   "$CPTR_VENV/bin/pip" install --quiet --disable-pip-version-check -U pip
-  "$CPTR_VENV/bin/pip" install --quiet --disable-pip-version-check 'cptr==0.9.21' \
+  "$CPTR_VENV/bin/pip" install --quiet --disable-pip-version-check 'cptr[agents]==0.9.21' \
     || { fail "не удалось поставить cptr"; exit 1; }
   ok "установлен"
+fi
+
+# На уже стоящем cptr доработка не применилась бы: ветка выше пропускается.
+# Проверяем SDK отдельно, чтобы починка дошла и до тех, кто ставил раньше.
+if [[ -x "$CPTR_VENV/bin/cptr" ]] && ! "$CPTR_VENV/bin/python" -c 'import claude_agent_sdk' >/dev/null 2>&1; then
+  have "дописываю claude-agent-sdk (нужен cptr для работы агента)"
+  "$CPTR_VENV/bin/pip" install --quiet --disable-pip-version-check 'claude-agent-sdk>=0.1.62' \
+    || warn "не удалось поставить claude-agent-sdk — чат будет отвечать ошибкой"
 fi
 
 # Патчи идемпотентны не полностью: повторное применение к уже пропатченному

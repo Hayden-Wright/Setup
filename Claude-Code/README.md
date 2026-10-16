@@ -108,6 +108,47 @@ curl -s -H "Authorization: Bearer $KEY" http://127.0.0.1:8100/v1/models
 Если пусто — cptr не запущен (`~/start-cptr.sh status`). Если модель есть, а
 в браузере нет — перезапусти контейнер: `docker restart open-webui`.
 
+**В чате «No API model connections configured».** У cptr нет пакета
+`claude-agent-sdk` — без него он не видит агента, а модель из
+`gateway.model` не разрешается. Скрипт ставит его сам (cptr с меткой
+`[agents]`); если cptr ставился раньше, запусти `./install-friend.sh` ещё раз.
+
+Вручную:
+
+```bash
+~/.local/share/cptr-venv/bin/pip install 'claude-agent-sdk>=0.1.62'
+~/start-cptr.sh restart
+```
+
+Проверить, что cptr видит агента:
+
+```bash
+~/.local/share/cptr-venv/bin/python -c \
+  "from cptr.utils.agents.detection import detect_profile; \
+   import asyncio; \
+   print(asyncio.run(detect_profile({'id':'claude-code','agent':'claude_code','command':'claude','mode':'auto'})))"
+```
+
+В строке должно быть `status='ready'`. Если `missing_dependency` — пакет не
+встал.
+
+**Пустой список моделей в Open WebUI.** Так и должно быть до первого захода
+в cptr: `/v1/models` отдаёт не модели, а *воркспейсы* cptr, и строка
+воркспейса появляется только после того, как ты открыл интерфейс cptr
+(`http://127.0.0.1:8100`). После этого модель вида `oasis - /home/oasis`
+появляется сама.
+
+**При каждом запуске спрашивает «Do you trust the files in this folder?»**
+Скрипт снимает это сам, записывая доверие в `~/.claude.json`. Если всё же
+спрашивает — запусти `./install-friend.sh` ещё раз. Флаг
+`--dangerously-skip-permissions` этот диалог не убирает: он про права на
+инструменты, а не про доверие к папке.
+
+**При каждом запуске просит пароль.** `~/start-all.sh` поднимает Docker
+через `sudo service docker start`, и для этого нужно правило sudoers.
+Скрипт добавляет его сам (`/etc/sudoers.d/docker-service`, только на эту
+одну команду).
+
 **«Auto-update failed» в терминале.** Обновление Claude Code не проходит —
 это тот же заблокированный `downloads.claude.ai`. На работу не влияет,
 можно игнорировать.

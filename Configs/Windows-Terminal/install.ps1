@@ -209,6 +209,70 @@ Write-Host ''
 Write-Host 'Windows Terminal + Fastfetch: установка настроек' -ForegroundColor Cyan
 Write-Host ''
 
+# --- 0. Политика выполнения -----------------------------------------------
+
+# Профиль PowerShell — это скрипт, и при политике Restricted PowerShell
+# отказывается его грузить:
+#   profile.ps1 cannot be loaded because running scripts is disabled
+# Ошибка вылезает в КАЖДОМ новом окне, хотя сам установщик отработал.
+# На свежей Windows политика именно Restricted, поэтому ставим RemoteSigned
+# для текущего пользователя: локальные скрипты запускаются, скачанные из
+# интернета — только с подписью. Права администратора не нужны.
+#
+# Смотреть надо НЕ Get-ExecutionPolicy без параметра: команда установки
+# снимает политику через -Scope Process, и в её окне эффективная политика —
+# Bypass. По ней проблема не видна, хотя в новом окне профиль не загрузится.
+# Поэтому берём то, что унаследует новое окно: CurrentUser, а если там
+# Undefined — LocalMachine.
+$scopePolicy = Get-ExecutionPolicy -Scope CurrentUser
+if ($scopePolicy -eq 'Undefined') { $scopePolicy = Get-ExecutionPolicy -Scope LocalMachine }
+
+# Групповая политика (домен) сильнее всего, и переопределить её нельзя —
+# если она задана, честно говорим об этом, а не делаем вид, что починили.
+# Два отдельных вызова: -Scope принимает одно значение, не массив.
+$gpo = @(
+    (Get-ExecutionPolicy -Scope MachinePolicy)
+    (Get-ExecutionPolicy -Scope UserPolicy)
+) | Where-Object { $_ -ne 'Undefined' }
+
+if ($gpo.Count -gt 0) {
+    Write-Bad "Политику задаёт групповая политика ($($gpo -join ', ')) — изменить её нельзя."
+    Write-Host '  Профиль загрузится только если политика разрешает локальные скрипты.'
+    Write-Host '  Это настраивается у администратора домена.'
+} elseif ($scopePolicy -in @('Restricted', 'Undefined')) {
+    Write-Step "Политика выполнения: $scopePolicy — ставлю RemoteSigned для текущего пользователя..."
+    # Вызов может БРОСИТЬ исключение ExecutionPolicyOverride, хотя на самом
+    # деле сработает: команда установки держит Process-политику Bypass, а она
+    # «конкретнее» CurrentUser, и PowerShell сообщает, что значение
+    # перекрыто. Поэтому об успехе судим по факту — перечитываем значение, —
+    # а не по отсутствию исключения. Иначе скрипт врал бы «не удалось» на
+    # машине, где всё на самом деле встало.
+    $setError = $null
+    try {
+        Set-ExecutionPolicy RemoteSigned -Scope CurrentUser -Force -ErrorAction Stop
+    } catch {
+        $setError = $_.Exception.Message
+    }
+    $applied = Get-ExecutionPolicy -Scope CurrentUser
+    if ($applied -in @('Restricted', 'Undefined')) {
+        Write-Bad "Не удалось изменить политику: $setError"
+        Write-Host '  Профиль не загрузится, Fastfetch не будет запускаться.'
+        Write-Host '  Выполни вручную и запусти скрипт снова:'
+        Write-Host '    Set-ExecutionPolicy RemoteSigned -Scope CurrentUser'
+    } else {
+        Write-Ok "Политика: $applied"
+    }
+} elseif ($scopePolicy -eq 'AllSigned') {
+    # AllSigned выставлен осознанно — не ослабляем его молча. Профиль
+    # подписи не имеет, поэтому работать не будет; так и говорим.
+    Write-Bad 'Политика AllSigned: профиль PowerShell не подписан и не загрузится.'
+    Write-Host '  Если это твоя настройка — оставь как есть, Fastfetch просто не будет'
+    Write-Host '  запускаться. Иначе разреши локальные скрипты:'
+    Write-Host '    Set-ExecutionPolicy RemoteSigned -Scope CurrentUser'
+} else {
+    Write-Ok "Политика выполнения: $scopePolicy"
+}
+
 # --- 1. Windows Terminal --------------------------------------------------
 
 Write-Step 'Проверяю, установлен ли Windows Terminal...'
