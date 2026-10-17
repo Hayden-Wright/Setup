@@ -6,7 +6,6 @@
 - <img src="https://www.google.com/s2/favicons?domain=chuyu.me&sz=64" width="16"> **[Dism++](https://github.com/Chuyu-Team/Dism-Multi-language/releases)** — обслуживание и очистка системы
 - <img src="https://www.google.com/s2/favicons?domain=lockhunter.com&sz=64" width="16"> **[LockHunter](https://lockhunter.com/download.htm)** — разблокировка файлов, занятых другим процессом
 - <img src="https://raw.githubusercontent.com/Hayden-Wright/browser-backup-tool/main/build/icon.png" width="16"> **[BrowserBackup](https://github.com/Hayden-Wright/browser-backup-tool/releases/latest)** — бэкап и восстановление профилей браузеров
-- <img src="https://raw.githubusercontent.com/ventoy/Ventoy/master/ICON/logo_256.png" width="16"> **[Ventoy](https://www.ventoy.net/en/download.html)** — загрузочная флешка с несколькими ISO
 
 ## Файлы
 
