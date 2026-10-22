@@ -74,13 +74,19 @@ put_env() {
     return
   fi
   mkdir -p "$(dirname "$dst")"
-  cp -p "$dst" "$dst.bak-$STAMP"
-  cp "$src" "$dst"
+
+  # Собираем результат во временный файл и сравниваем с текущим ДО записи.
+  # Без этого каждый запуск создавал бы .bak с ключами, даже когда содержимое
+  # не изменилось, — а deploy.sh теперь гоняется обновлятором каждый час.
+  # Сутки такого «обновления» оставили бы 24 копии секретов на диске.
+  local tmp
+  tmp="$(mktemp "$dst.XXXXXX")" || return 1
+  cp "$src" "$tmp"
   for k in WEBUI_SECRET_KEY OPENAI_API_KEY; do
     local have
-    have="$(sed -n "s/^$k=//p" "$dst.bak-$STAMP" | head -1)"
+    have="$(sed -n "s/^$k=//p" "$dst" | head -1)"
     [[ -n "$have" ]] || continue
-    python3 -I - "$dst" "$k" "$have" <<'PY'
+    python3 -I - "$tmp" "$k" "$have" <<'PY' || true
 import pathlib, re, sys
 path, key, value = pathlib.Path(sys.argv[1]), sys.argv[2], sys.argv[3]
 text = path.read_text()
@@ -88,6 +94,15 @@ text = re.sub(rf'^{re.escape(key)}=.*$', f'{key}={value}', text, flags=re.M)
 path.write_text(text)
 PY
   done
+  chmod "$mode" "$tmp"
+
+  if cmp -s "$tmp" "$dst"; then
+    rm -f -- "$tmp"
+    skip "уже на месте: ${dst/#$HOME/~}"
+    return
+  fi
+  cp -p "$dst" "$dst.bak-$STAMP"
+  mv -f -- "$tmp" "$dst"
   chmod "$mode" "$dst"
   ok "${dst/#$HOME/~} (ключи сохранены)"
 }
