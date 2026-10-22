@@ -7,11 +7,17 @@
 #   %LOCALAPPDATA%\zim-claude\
 #     start-all.bat     - bring the whole stack up, then run zim-claude
 #     new-session.bat   - just a new independent zim-claude session
+#     wsl--shrink.bat   - reclaim disk space held by the WSL virtual disk
 #
 #   Desktop:
 #     Claude Code.lnk              - start-all.bat, in a Windows Terminal window
 #     Claude Code - session.lnk    - new-session.bat, in a Windows Terminal window
 #     Claude Folder.lnk            - the WSL home directory in Explorer
+#     WSL Shrink.lnk               - wsl--shrink.bat (asks for admin rights)
+#
+# Everything is placed under %LOCALAPPDATA% rather than a fixed drive path, so
+# the layout is the same on every machine regardless of user name or where
+# Windows lives.
 #
 # Every launch is a new window and a new independent session. Without Windows
 # Terminal the .bat falls back to a plain console window.
@@ -89,6 +95,20 @@ $newSessionBat = $newSessionBat.Replace('__DISTRO__', $Distro) -replace "`r?`n",
 $ascii = New-Object System.Text.ASCIIEncoding
 [System.IO.File]::WriteAllText((Join-Path $AppDir 'start-all.bat'),   $startAllBat,   $ascii)
 [System.IO.File]::WriteAllText((Join-Path $AppDir 'new-session.bat'), $newSessionBat, $ascii)
+
+# wsl--shrink.bat ships as a file beside this script: it is long enough that
+# embedding it as a here-string would make it painful to edit. Copied with CRLF
+# preserved - cmd.exe needs it.
+$shrinkSrc = Join-Path $PSScriptRoot 'wsl--shrink.bat'
+$shrinkBat = Join-Path $AppDir 'wsl--shrink.bat'
+if (Test-Path $shrinkSrc) {
+    $text = [System.IO.File]::ReadAllText($shrinkSrc) -replace "`r?`n", "`r`n"
+    [System.IO.File]::WriteAllText($shrinkBat, $text, $ascii)
+    Write-Ok "wsl--shrink.bat"
+} else {
+    Write-Say "no wsl--shrink.bat beside the script - skipping the disk cleaner"
+}
+
 Write-Ok "launch scripts: $AppDir"
 
 # --- icons ------------------------------------------------------------------
@@ -164,6 +184,15 @@ if (-not $wslHome) { $wslHome = "\\wsl.localhost\$Distro" }
 
 New-Shortcut -Name 'Claude Folder' -Target $wslHome `
     -Description "WSL home directory ($Distro)"
+
+# 4. WSL disk shrink. Runs the .bat directly: it raises its own UAC prompt, so
+# the shortcut itself needs no admin rights and works for every user.
+if (Test-Path $shrinkBat) {
+    New-Shortcut -Name 'WSL Shrink' `
+        -Target $shrinkBat `
+        -WorkingDirectory $AppDir `
+        -Description 'Reclaim disk space used by the WSL virtual disk'
+}
 
 Write-Host ''
 Write-Ok "done: $Desktop"

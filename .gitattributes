@@ -1,0 +1,6 @@
+# Windows batch and PowerShell files must keep CRLF and stay ASCII: cmd.exe
+# treats a BOM as part of the first command, and PowerShell 5.1 reads a
+# BOM-less script in the ANSI codepage.
+*.bat  text eol=crlf
+*.cmd  text eol=crlf
+*.ps1  text eol=lf
