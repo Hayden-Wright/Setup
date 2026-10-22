@@ -748,15 +748,23 @@ if put_update_script; then
   # это подстраховка, а не основной путь. flock внутри скрипта не даст двум
   # копиям работать одновременно.
   if command -v crontab >/dev/null 2>&1; then
-    if crontab -l 2>/dev/null | grep -q 'zim-deploy-update.sh'; then
+    CRON_LINE="@daily $HOME/.local/bin/zim-deploy-update.sh >/dev/null 2>&1"
+    # Задание переписываем, а не «добавляем, если нет»: путь к скрипту может
+    # смениться (другой $HOME, переезд), и старая строка тогда молча висит
+    # нерабочей. Заодно убираем дубликаты, если они накопились.
+    #
+    # Уже настроено = наша строка встречается ровно один раз и совпадает
+    # побайтно. Любое расхождение (старый путь, дубликат) — переписываем.
+    existing="$(crontab -l 2>/dev/null || true)"
+    ours="$(printf '%s\n' "$existing" | grep 'zim-deploy-update\.sh' || true)"
+    if [[ "$ours" == "$CRON_LINE" ]]; then
       have "задание cron уже стоит"
     else
-      # Путь абсолютный: cron запускает команду через sh и $HOME подставил бы,
-      # но с явным путём задание читается однозначно.
-      { crontab -l 2>/dev/null || true
-        printf '@daily %s >/dev/null 2>&1\n' "$HOME/.local/bin/zim-deploy-update.sh"
+      cleaned="$(printf '%s\n' "$existing" | grep -v 'zim-deploy-update\.sh' || true)"
+      { printf '%s\n' "$cleaned" | sed '/^$/d'
+        printf '%s\n' "$CRON_LINE"
       } | crontab - 2>/dev/null \
-        && ok "добавлено задание cron (@daily)" \
+        && ok "задание cron обновлено (@daily)" \
         || have "cron недоступен — обновление будет при запуске терминала"
     fi
   fi
