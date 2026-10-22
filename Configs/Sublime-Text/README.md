@@ -96,11 +96,33 @@ cd "путь\к\Setup\Configs\Sublime-Text"
 3. Скопировать туда папки `Packages/User` и `Packages/AuraTheme` из этого репозитория.
 4. Поставить [Package Control](https://packagecontrol.io/installation).
 5. `Ctrl+Shift+P` → `Install Package` → **MarkdownEditing**, **Markdown Extended**.
-6. Пункт «Open with Sublime Text» в контекстном меню — если нужен без скрипта,
-   создай в `regedit` раздел
-   `HKEY_CURRENT_USER\Software\Classes\*\shell\Open with Sublime Text`
-   с параметром `Icon` = `путь\к\sublime_text.exe,0` и подраздел `command`
-   со значением `"путь\к\sublime_text.exe" "%1"`.
+6. Пункт «Open with Sublime Text» в контекстном меню — примени `.reg` ниже.
+
+### Пункт в контекстном меню
+
+Сохрани это в файл `open-with-sublime.reg` и запусти двойным щелчком.
+Поправь путь, если Sublime стоит не в `Program Files`. Права администратора
+не нужны — ключ пишется в профиль пользователя.
+
+```reg
+Windows Registry Editor Version 5.00
+
+[HKEY_CURRENT_USER\Software\Classes\*\shell\Open with Sublime Text]
+@="Open with Sublime Text"
+"Icon"="C:\\Program Files\\Sublime Text\\sublime_text.exe,0"
+
+[HKEY_CURRENT_USER\Software\Classes\*\shell\Open with Sublime Text\command]
+@="\"C:\\Program Files\\Sublime Text\\sublime_text.exe\" \"%1\""
+```
+
+Пишем в `HKEY_CURRENT_USER`, а не в `HKEY_CLASSES_ROOT` как обычно в готовых
+`.reg` из интернета: для проводника это одно и то же, но HKCU не требует прав
+администратора и не трогает другие учётные записи. Откатить — удалить эту
+ветку в `regedit`.
+
+Если при запуске выскочило «The specified file is not a registry file» —
+файл сохранён в UTF-8, а `reg import` понимает только UTF-16 или ANSI. В
+Блокноте: `Файл` → `Сохранить как` → кодировка **Unicode** (это UTF-16 LE).
 
 ## Полезно знать
 
