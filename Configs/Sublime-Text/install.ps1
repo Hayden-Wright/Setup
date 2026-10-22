@@ -13,7 +13,8 @@
       2. Закрывает запущенный редактор (иначе он перезапишет настройки при выходе).
       3. Делает бэкап текущих настроек.
       4. Кладёт конфиги и тему Aura.
-      5. Ставит Package Control и пакеты MarkdownEditing + Markdown Extended.
+      5. Добавляет пункт «Open with Sublime Text» в контекстное меню.
+      6. Ставит Package Control и пакеты MarkdownEditing + Markdown Extended.
 
     Файл сохранён с BOM: без него PowerShell 5.1 читает кириллицу как ANSI
     и портит все строки при запуске скрипта по пути.
@@ -181,7 +182,35 @@ Install-ConfigFile -RelativePath 'Packages\AuraTheme\aura-theme-soft.tmTheme' `
 
 Write-Ok 'Настройки и тема Aura на месте'
 
-# --- 5. Пакеты ------------------------------------------------------------
+# --- 5. Контекстное меню --------------------------------------------------
+
+# Пункт «Open with Sublime Text» по правой кнопке на любом файле.
+#
+# Пишем в HKCU\Software\Classes, а не в HKCR, как это делает .reg-файл из
+# проводника: для оболочки Windows это один и тот же раздел, но HKCU правится
+# без администратора и живёт в профиле пользователя. Установщику тогда не
+# нужны права, а на чужой машине запись не задевает другие учётки.
+#
+# Путь к exe берём из $sublimeExe: он уже найден выше с учётом всех трёх мест
+# установки, поэтому Program Files не хардкодится.
+Write-Step 'Добавляю пункт «Open with Sublime Text» в контекстное меню...'
+
+$menuKey = 'Software\Classes\*\shell\Open with Sublime Text'
+try {
+    $key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($menuKey)
+    $key.SetValue('', 'Open with Sublime Text', [Microsoft.Win32.RegistryValueKind]::String)
+    $key.SetValue('Icon', "$sublimeExe,0", [Microsoft.Win32.RegistryValueKind]::String)
+    $key.Close()
+
+    $cmd = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey("$menuKey\command")
+    $cmd.SetValue('', '"' + $sublimeExe + '" "%1"', [Microsoft.Win32.RegistryValueKind]::String)
+    $cmd.Close()
+    Write-Ok 'Контекстное меню'
+} catch {
+    Write-Bad "Контекстное меню не добавилось: $($_.Exception.Message)"
+}
+
+# --- 6. Пакеты ------------------------------------------------------------
 
 New-Item -ItemType Directory -Path $TempRoot -Force | Out-Null
 

@@ -30,7 +30,10 @@ Windows: там политика `Restricted`, и без неё запуск с�
    `%APPDATA%\Sublime Text\Packages_backup_ГГГГ-ММ-ДД_ЧЧ-ММ-СС`.
 4. **Кладёт настройки**: `Preferences.sublime-settings`, `Markdown.sublime-settings`,
    `Package Control.sublime-settings` и тему `aura-theme-soft.tmTheme`.
-5. **Ставит пакеты**: Package Control, MarkdownEditing, Markdown Extended.
+5. **Добавляет в контекстное меню** пункт «Open with Sublime Text» — правая
+   кнопка на любом файле. Пишется в профиль пользователя, права администратора
+   не нужны.
+6. **Ставит пакеты**: Package Control, MarkdownEditing, Markdown Extended.
 
 ## Как проверить, что всё получилось
 
@@ -41,6 +44,8 @@ Windows: там политика `Restricted`, и без неё запуск с�
   разноцветными. Синтаксис переключается через `View` → `Syntax` → `Markdown`.
 - **Пакеты.** `Ctrl+Shift+P` → набери `Install Package` — если команда есть,
   Package Control на месте.
+- **Контекстное меню.** Правая кнопка на любом файле — там должен быть пункт
+  «Open with Sublime Text».
 
 Настройки лежат в `%APPDATA%\Sublime Text\Packages\User`. Быстро открыть эту
 папку: в Sublime `Preferences` → `Browse Packages…`.
@@ -91,6 +96,11 @@ cd "путь\к\Setup\Configs\Sublime-Text"
 3. Скопировать туда папки `Packages/User` и `Packages/AuraTheme` из этого репозитория.
 4. Поставить [Package Control](https://packagecontrol.io/installation).
 5. `Ctrl+Shift+P` → `Install Package` → **MarkdownEditing**, **Markdown Extended**.
+6. Пункт «Open with Sublime Text» в контекстном меню — если нужен без скрипта,
+   создай в `regedit` раздел
+   `HKEY_CURRENT_USER\Software\Classes\*\shell\Open with Sublime Text`
+   с параметром `Icon` = `путь\к\sublime_text.exe,0` и подраздел `command`
+   со значением `"путь\к\sublime_text.exe" "%1"`.
 
 ## Полезно знать
 
