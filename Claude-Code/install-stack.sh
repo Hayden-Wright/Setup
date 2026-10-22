@@ -1,21 +1,30 @@
 #!/usr/bin/env bash
-# install-friend.sh — поставить весь стек одной командой.
+# install-stack.sh — поставить весь стек одной командой.
+#
+#   cd ~/zim-claude/deploy && ./install-stack.sh
 #
 # Скрипт можно запускать сколько угодно раз: он смотрит, что уже сделано, и
 # доделывает только оставшееся. Если чего-то не хватает (например, ты ещё не
-# зарегистрировался в cptr), он скажет, что сделать, и попросит запустить себя
-# снова.
+# зарегистрировался в cptr), он скажет, что сделать, и попросит запустить
+# себя снова.
 #
-# Запускать из каталога, куда склонирован репозиторий:
-#
-#   ./install-friend.sh
-#
-# Своё окружение не трогает: ставит только то, чего нет.
+# Ставит: Docker, доработки zim-claude (веб-поиск, zim-memory, настройки
+# Claude Code), SearxNG, cptr и Open WebUI, плюс ярлыки на рабочем столе
+# Windows. Сам zim-claude и прокси ставит install.sh из корня репозитория —
+# этот скрипт вызывает его, если их нет.
 
 set -uo pipefail
 
 SRC="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 FILES="$SRC/files"
+
+# Чекаут zim-claude. Здесь он нужен ровно затем, чтобы его запустить
+# (install.sh) и позже поднять Desktop-шлюз. Своих файлов туда не кладём —
+# см. комментарий в deploy.sh.
+ZIM_CLAUDE_DIR="${ZIM_CLAUDE_DIR:-$HOME/zim-claude}"
+
+# Всё, что принадлежит этому набору, живёт отдельно от обоих чекаутов.
+RUNTIME="${ZIM_CLAUDE_RUNTIME_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/zim-claude}"
 
 # ── оформление вывода ────────────────────────────────────────────────────────
 if [[ -t 1 ]]; then
@@ -39,7 +48,7 @@ need() { command -v "$1" >/dev/null 2>&1; }
 
 # ── проверки окружения ───────────────────────────────────────────────────────
 
-[[ -d "$FILES" ]] || { fail "нет каталога files/ рядом со скриптом — запусти из корня репозитория"; exit 1; }
+[[ -d "$FILES" ]] || { fail "нет каталога files/ рядом со скриптом — запусти из deploy/"; exit 1; }
 
 # ~/.local/bin добавляем в PATH СРАЗУ. Иначе на повторном запуске уже
 # установленный claude (и zim-claude, и zim-memory) не находится: install.sh
@@ -52,7 +61,7 @@ printf '%sМожно запускать повторно — уже сделан
 
 # ── 1. базовые пакеты ────────────────────────────────────────────────────────
 
-step "1/8  Базовые пакеты"
+step "1/10  Базовые пакеты"
 
 MISSING=()
 for pkg in git curl python3; do
@@ -68,8 +77,6 @@ python3 -c 'import ensurepip' >/dev/null 2>&1 || MISSING+=("python3-venv")
 if (( ${#MISSING[@]} )); then
   warn "не хватает: ${MISSING[*]}"
   echo "      сейчас установим (понадобится пароль от системы)"
-  # update обязателен: на свежей WSL списки пакетов пусты, и apt не знает даже
-  # про docker.io — установка падает с "has no installation candidate".
   sudo apt-get update -qq || warn "apt update прошёл с ошибками, продолжаю"
   sudo apt-get install -y "${MISSING[@]}" || { fail "не удалось установить пакеты"; exit 1; }
   ok "пакеты установлены"
@@ -79,7 +86,7 @@ fi
 
 # ── 2. Docker ────────────────────────────────────────────────────────────────
 
-step "2/8  Docker"
+step "2/10  Docker"
 
 if need docker; then
   if docker ps >/dev/null 2>&1; then
@@ -89,15 +96,19 @@ if need docker; then
     if ! id -nG | tr ' ' '\n' | grep -qx docker; then
       sudo usermod -aG docker "$USER" && have "добавил тебя в группу docker"
     fi
-    fail "закрой это окно терминала, открой заново и запусти скрипт снова"
-    exit 0
+    # В WSL systemd поднимает Docker сам; без systemd — service docker start.
+    sudo -n service docker start >/dev/null 2>&1 || sudo service docker start >/dev/null 2>&1 || true
+    if ! docker ps >/dev/null 2>&1; then
+      fail "закрой это окно терминала, открой заново и запусти скрипт снова"
+      exit 0
+    fi
+    ok "Docker запущен"
   fi
 else
   warn "Docker не установлен"
   # docker.io лежит в компоненте universe. На свежей Ubuntu он обычно включён,
   # но если выключен (или система ставилась минимальной), apt отвечает
   #   Package 'docker.io' has no installation candidate
-  # и предлагает только "is only available from another source".
   if ! sudo apt-get install -y docker.io; then
     warn "не вышло напрямую — включаю компонент universe и пробую снова"
     sudo apt-get install -y software-properties-common >/dev/null 2>&1
@@ -105,7 +116,7 @@ else
     sudo apt-get update -qq || warn "apt update прошёл с ошибками, продолжаю"
     sudo apt-get install -y docker.io || { fail "не удалось поставить Docker"; exit 1; }
   fi
-  sudo systemctl enable --now docker >/dev/null 2>&1
+  sudo systemctl enable --now docker >/dev/null 2>&1 || true
   sudo usermod -aG docker "$USER" >/dev/null 2>&1
   fail "Docker поставлен. Закрой это окно терминала, открой заново и запусти скрипт снова"
   exit 0
@@ -126,74 +137,56 @@ else
   have "разрешаю запуск Docker без пароля (только «service docker»)"
   # Через visudo -cf: битый файл в sudoers.d ломает sudo целиком, поэтому
   # сначала проверяем синтаксис на временном файле и только потом кладём.
-  # Проверка идёт БЕЗ sudo: visudo -cf читает файл и root для этого не нужен,
-  # а с sudo она молча провалилась бы, если пароль уже спрошен.
   SUDOERS_TMP="$(mktemp)"
   printf '%s ALL=(ALL) NOPASSWD: %s docker *\n' "$USER" "$SERVICE_BIN" >"$SUDOERS_TMP"
-  if visudo -cf "$SUDOERS_TMP" >/dev/null 2>&1; then
-    sudo install -m 0440 -o root -g root "$SUDOERS_TMP" "$SUDOERS"
+  if ! visudo -cf "$SUDOERS_TMP" >/dev/null 2>&1; then
+    warn "правило не прошло проверку синтаксиса — sudoers не трогаю"
+  elif sudo install -m 0440 -o root -g root "$SUDOERS_TMP" "$SUDOERS"; then
     ok "правило добавлено: $SUDOERS"
   else
-    warn "правило не прошло проверку синтаксиса — sudoers не трогаю"
-    warn "start-all.sh будет спрашивать пароль; можно убрать sudo из строки"
-    warn "«sudo service docker start» в ~/start-all.sh — Docker и так стартует"
+    # install вернул ошибку (например, sudo спросил пароль и не получил его).
+    # Без этой проверки успех печатался бы всегда: set -uo pipefail без -e
+    # не останавливает скрипт, и следующая строка выполнилась бы как обычно.
+    warn "не удалось записать $SUDOERS — start-all.sh будет спрашивать пароль"
   fi
   rm -f "$SUDOERS_TMP"
 fi
 
-# ── 3. Claude Code ───────────────────────────────────────────────────────────
+# ── 3. Claude Code и zim-claude ──────────────────────────────────────────────
 
-step "3/8  Claude Code"
-
-# Сам Claude Code в репозитории zim-claude НЕ лежит — там только обёртка,
-# которая запускает уже установленный `claude`. Поэтому бинарь берётся с
-# официального сайта, ровно как это делает install.sh самого zim-claude.
-# Пробуем два источника: сначала официальный установщик, потом npm.
-install_claude() {
-  local tmp; tmp="$(mktemp)"
-  have "качаю установщик (официальный сайт)..."
-  # --max-time: без него curl висит до двух минут на мёртвом соединении
-  # вместо того, чтобы сразу сказать, что связи нет.
-  if curl -fsSL --connect-timeout 15 --max-time 120 \
-       https://claude.ai/install.sh -o "$tmp" 2>/dev/null; then
-    bash "$tmp" && rm -f "$tmp" && return 0
-  fi
-  rm -f "$tmp"
-
-  warn "официальный сайт недоступен — пробую через npm"
-  if need npm; then
-    npm install -g @anthropic-ai/claude-code >/dev/null 2>&1 && return 0
-  else
-    warn "npm не установлен — ставлю nodejs и пробую снова"
-    sudo apt-get install -y nodejs npm >/dev/null 2>&1 \
-      && npm install -g @anthropic-ai/claude-code >/dev/null 2>&1 && return 0
-  fi
-  return 1
-}
+step "3/10  Claude Code и zim-claude"
 
 if need claude; then
-  ok "уже установлен: $(claude --version 2>/dev/null | head -1)"
+  ok "Claude Code уже установлен: $(claude --version 2>/dev/null | head -1)"
 else
-  if install_claude; then
-    export PATH="$HOME/.local/bin:$PATH"
-    need claude && ok "установлен" || { fail "установился, но не виден — запусти скрипт ещё раз"; exit 0; }
+  warn "Claude Code не найден"
+  TMP_INST="$(mktemp)"
+  if curl -fsSL --connect-timeout 15 --max-time 120 https://claude.ai/install.sh -o "$TMP_INST" 2>/dev/null \
+     && bash "$TMP_INST"; then
+    ok "установлен"
   else
-    fail "не удалось скачать Claude Code"
-    cat <<'EOF'
+    fail "не удалось скачать Claude Code — проверь связь с downloads.claude.ai"
+    todo "поставить Claude Code (curl -fsSL https://claude.ai/install.sh | bash)"
+  fi
+  rm -f "$TMP_INST"
+fi
 
-      Скорее всего мешает VPN или прокси: соединение с downloads.claude.ai
-      не проходит. Что попробовать по порядку:
-
-        1. Выключи VPN и запусти скрипт снова.
-        2. Если включён прокси (FlClash и подобные) — выключи его или добавь
-           downloads.claude.ai и registry.npmjs.org в исключения.
-        3. Проверь связь вручную:
-             curl -I --max-time 10 https://claude.ai/install.sh
-           Должен вернуться код 302. Таймаут означает, что сеть закрыта.
-
-      После этого запусти ./install-friend.sh снова.
-
-EOF
+if [[ -x "$HOME/.local/bin/zim-claude" ]]; then
+  ok "zim-claude уже установлен"
+else
+  # Клонируем апстрим сами, если чекаута нет: с этого момента он принадлежит
+  # автообновлению zim-claude, а наш набор в нём ничего не держит.
+  if [[ ! -d "$ZIM_CLAUDE_DIR/.git" ]]; then
+    have "клонирую zim-claude в $ZIM_CLAUDE_DIR"
+    git clone --quiet https://github.com/Mr-Destroyer/zim-claude "$ZIM_CLAUDE_DIR" \
+      || { fail "не удалось склонировать zim-claude"; exit 1; }
+  fi
+  have "запускаю install.sh из $ZIM_CLAUDE_DIR"
+  ( cd "$ZIM_CLAUDE_DIR" && ./install.sh ) 2>&1 | sed 's/^/      /'
+  if [[ -x "$HOME/.local/bin/zim-claude" ]]; then
+    ok "zim-claude установлен"
+  else
+    fail "zim-claude не установился — смотри вывод выше"
     exit 1
   fi
 fi
@@ -216,8 +209,6 @@ path = home / ".claude.json"
 try:
     data = json.loads(path.read_text()) if path.exists() else {}
 except ValueError:
-    # Битый файл не трогаем: Claude Code пересоздаст его сам, а затирать
-    # чужую историю сессий ради одной строки не стоит.
     print("  ! ~/.claude.json не читается — пропускаю, доверие спросят один раз")
     raise SystemExit(0)
 
@@ -226,7 +217,6 @@ if not isinstance(data, dict):
 
 projects = data.get("projects")
 if not isinstance(projects, dict):
-    # Ключа нет или он не тот, чем кажется — заводим свой, чужое не трогаем.
     projects = {}
     data["projects"] = projects
 
@@ -243,97 +233,9 @@ else:
     print(f"  ✓ доверие записано: {home}")
 PY
 
-# ── 4. zim-claude ────────────────────────────────────────────────────────────
+# ── 4. доработки ─────────────────────────────────────────────────────────────
 
-step "4/8  zim-claude (CLI и прокси)"
-
-ZIM_DIR="$HOME/zim-claude"
-
-if [[ -d "$ZIM_DIR/.git" ]]; then
-  have "репозиторий уже склонирован"
-else
-  git clone --quiet https://github.com/Mr-Destroyer/zim-claude "$ZIM_DIR" \
-    || { fail "не удалось склонировать репозиторий"; exit 1; }
-  ok "склонирован в ~/zim-claude"
-fi
-
-# litellm ставим ЗАРАНЕЕ, в тот самый venv, который ищет install.sh. Иначе
-# установщик спросит разрешения и, если терминал не интерактивный, просто
-# пропустит шаг — прокси останется без litellm и не поднимется.
-VENV="$HOME/.local/share/zim-claude/venv"
-if [[ -x "$VENV/bin/litellm" ]]; then
-  have "litellm уже стоит в $VENV"
-else
-  have "ставлю litellm — это займёт пару минут и ~300 МБ"
-  mkdir -p "$HOME/.local/share/zim-claude"
-  chmod 700 "$HOME/.local/share/zim-claude"
-  python3 -m venv "$VENV" || { fail "не удалось создать venv"; exit 1; }
-  "$VENV/bin/pip" install --quiet --disable-pip-version-check -U pip
-  if "$VENV/bin/pip" install --quiet --disable-pip-version-check 'litellm[proxy]>=1.100.1' 'uvloop>=0.22.1'; then
-    ok "litellm установлен"
-  else
-    fail "не удалось поставить litellm"; exit 1
-  fi
-fi
-
-have "запускаю установщик zim-claude (теперь он ничего не спрашивает)"
-# Код возврата install.sh теряется в конвейере с sed, поэтому смотрим на него
-# явно через PIPESTATUS: иначе провалившийся установщик выглядел бы как успех,
-# а дальше всё падало бы на отсутствующем zim-claude с непонятной ошибкой.
-( cd "$ZIM_DIR" && ./install.sh ) 2>&1 | sed 's/^/      /'
-INSTALL_RC="${PIPESTATUS[0]}"
-
-if [[ ! -x "$HOME/.local/bin/zim-claude" ]]; then
-  fail "zim-claude не установился — смотри вывод выше"
-  exit 1
-elif (( INSTALL_RC != 0 )); then
-  warn "установщик завершился с кодом $INSTALL_RC, но zim-claude на месте"
-  warn "проверь вывод выше: возможно, что-то пропущено"
-  ok "zim-claude установлен"
-else
-  ok "zim-claude установлен"
-fi
-
-# Запускаем оба прокси СРАЗУ после установки. Без этого:
-#   :4000 — терминал зависает на «Handling...», потому что claude стучится
-#           в прокси, которого нет (zim-claude поднял бы его сам, но только
-#           если конфиг уже на месте — а доработки кладутся следующим шагом);
-#   :4002 — агент cptr в Open WebUI получает 400 на каждую модель.
-#
-# Проверяем результат по порту, а не по коду возврата: вывод идёт через
-# конвейер с tail, и код возврата берётся от tail, который всегда 0. Упавший
-# прокси иначе выглядел бы как поднявшийся, а всплывало это позже — зависшим
-# на «Handling...» терминалом.
-proxy_up() {
-  curl -sf "http://127.0.0.1:$1/health/liveliness" -o /dev/null --max-time 3 2>/dev/null
-}
-
-have "поднимаю прокси :4000 (для терминала)"
-"$HOME/.local/bin/start-litellm.sh" restart 2>&1 | tail -2 | sed 's/^/      /'
-if proxy_up 4000; then
-  ok "прокси :4000 отвечает"
-else
-  warn "прокси :4000 не поднялся — терминал будет висеть на «Handling...»"
-  warn "смотри /tmp/litellm-proxy.log"
-  todo "поднять прокси :4000 (~/.local/bin/start-litellm.sh restart)"
-fi
-
-if [[ -x "$ZIM_DIR/claude-desktop-integration/start-desktop-proxy.sh" ]]; then
-  have "поднимаю прокси :4002 (для агента cptr)"
-  ( cd "$ZIM_DIR/claude-desktop-integration" && ./start-desktop-proxy.sh restart ) \
-    2>&1 | tail -2 | sed 's/^/      /'
-  if proxy_up 4002; then
-    ok "прокси :4002 отвечает"
-  else
-    warn "прокси :4002 не поднялся — агент в Open WebUI будет отвечать ошибкой"
-    warn "смотри /tmp/litellm-desktop.log"
-    todo "поднять прокси :4002 (cd ~/zim-claude/claude-desktop-integration && ./start-desktop-proxy.sh restart)"
-  fi
-fi
-
-# ── 5. доработки ─────────────────────────────────────────────────────────────
-
-step "5/8  Доработки (веб-поиск, zim-memory, конфиги)"
+step "4/10  Доработки (веб-поиск, zim-memory, настройки Claude Code)"
 
 ( cd "$SRC" && ./deploy.sh ) 2>&1 | sed 's/^/      /'
 if (( PIPESTATUS[0] != 0 )); then
@@ -341,36 +243,31 @@ if (( PIPESTATUS[0] != 0 )); then
   exit 1
 fi
 
-# deploy.sh заменил ~/litellm-config.yaml (добавил перехват веб-поиска), но
-# уже запущенный прокси держит в памяти СТАРЫЙ конфиг. Без перезапуска
-# веб-поиск не заработает: LiteLLM продолжит отдавать 400 на web_search.
-# Перезапускаем ПОСЛЕ доработок — на шаге 4 конфиг был ещё исходный.
+# deploy.sh заменил ~/tokenjuice/litellm-config.yaml (добавил перехват
+# веб-поиска), но уже запущенный прокси держит в памяти СТАРЫЙ конфиг.
+# Перезапускаем, иначе веб-поиск не заработает.
 have "перезапускаю прокси, чтобы подхватил новый конфиг"
-"$HOME/.local/bin/start-litellm.sh" restart 2>&1 | tail -1 | sed 's/^/      /'
-proxy_up 4000 || warn "прокси :4000 не поднялся после перезапуска — смотри /tmp/litellm-proxy.log"
-if [[ -x "$ZIM_DIR/claude-desktop-integration/start-desktop-proxy.sh" ]]; then
-  ( cd "$ZIM_DIR/claude-desktop-integration" && ./start-desktop-proxy.sh restart ) \
-    2>&1 | tail -1 | sed 's/^/      /'
-  proxy_up 4002 || warn "прокси :4002 не поднялся — смотри /tmp/litellm-desktop.log"
+"$HOME/.local/bin/start-litellm.sh" restart 2>&1 | tail -2 | sed 's/^/      /'
+curl -sf http://127.0.0.1:4000/health/liveliness -o /dev/null --max-time 3 2>/dev/null \
+  && ok "прокси :4000 отвечает" \
+  || { warn "прокси :4000 не поднялся — смотри /tmp/litellm-proxy.log"; todo "поднять прокси :4000"; }
+
+if [[ -x "$ZIM_CLAUDE_DIR/claude-desktop-integration/start-desktop-proxy.sh" ]]; then
+  ( cd "$ZIM_CLAUDE_DIR/claude-desktop-integration" && ./start-desktop-proxy.sh restart ) \
+    2>&1 | tail -2 | sed 's/^/      /'
+  curl -sf http://127.0.0.1:4002/health/liveliness -o /dev/null --max-time 3 2>/dev/null \
+    && ok "прокси :4002 отвечает" \
+    || { warn "прокси :4002 не поднялся — смотри /tmp/litellm-desktop.log"; todo "поднять прокси :4002"; }
 fi
 
-# PATH для zsh: install.sh прописывает только ~/.bashrc, а оболочка по
-# умолчанию в Ubuntu — zsh, если её поставили.
-if [[ -f "$HOME/.zshrc" ]] && ! grep -q '.local/bin' "$HOME/.zshrc"; then
-  printf '\nexport PATH="$HOME/.local/bin:$PATH"\n' >>"$HOME/.zshrc"
-  have "добавил ~/.local/bin в ~/.zshrc"
-fi
+# ── 5. SearxNG ───────────────────────────────────────────────────────────────
 
-# ── 6. SearxNG ───────────────────────────────────────────────────────────────
-
-step "6/8  SearxNG (локальный веб-поиск)"
+step "5/10  SearxNG (локальный веб-поиск)"
 
 docker network inspect zim-net >/dev/null 2>&1 || docker network create zim-net >/dev/null 2>&1
 
-# Образ весит ~380 МБ, и на свежей машине его нужно скачать. Раньше это шло
-# с заглушённым выводом: терминал молчал несколько минут, а потом появлялось
-# «не удалось запустить» без причины. Теперь скачивание видно, а ошибка
-# докера печатается как есть.
+# Образ весит ~380 МБ, и на свежей машине его нужно скачать. Скачивание
+# показываем, а ошибку докера печатаем как есть.
 SEARXNG_OK=0
 
 if docker ps -a --format '{{.Names}}' | grep -qx searxng; then
@@ -403,7 +300,6 @@ else
     fi
   else
     warn "не удалось скачать образ SearxNG — проверь связь с интернетом"
-    warn "вручную:  docker pull searxng/searxng:latest"
   fi
 fi
 docker network connect zim-net searxng >/dev/null 2>&1
@@ -421,8 +317,6 @@ if (( SEARXNG_OK )); then
     sleep 1
   done
   if (( ! SEARXNG_UP )); then
-    # Раньше здесь просто заканчивался цикл — и дальше всё шло молча, будто
-    # всё в порядке, а веб-поиск потом не работал.
     warn "контейнер запущен, но не отвечает на 127.0.0.1:8888 за 30 с"
     warn "смотри лог:  docker logs searxng"
     SEARXNG_OK=0
@@ -434,9 +328,9 @@ if (( ! SEARXNG_OK )); then
   todo "запустить SearxNG (см. README, раздел «Если что-то не так»)"
 fi
 
-# ── 7. cptr ──────────────────────────────────────────────────────────────────
+# ── 6. cptr ──────────────────────────────────────────────────────────────────
 
-step "7/8  cptr (агент с доступом к диску)"
+step "6/10  cptr (агент с доступом к диску)"
 
 CPTR_VENV="$HOME/.local/share/cptr-venv"
 CPTR_PY="$CPTR_VENV/bin/python"
@@ -470,7 +364,7 @@ fi
 CPTR_PKG="$(ls -d "$CPTR_VENV"/lib/python*/site-packages/cptr 2>/dev/null | head -1)"
 if [[ -n "$CPTR_PKG" ]]; then
   for p in gateway-images config-multiline-toml; do
-    pf="$ZIM_DIR/patches/$p.patch"
+    pf="$RUNTIME/patches/$p.patch"
     [[ -f "$pf" ]] || continue
     if patch -p1 --dry-run -d "$CPTR_PKG" <"$pf" >/dev/null 2>&1; then
       patch -p1 -d "$CPTR_PKG" <"$pf" >/dev/null 2>&1 && ok "патч $p применён"
@@ -481,9 +375,6 @@ if [[ -n "$CPTR_PKG" ]]; then
 fi
 
 # Стартуем cptr (если ещё не запущен) — дальше нужен его пользователь.
-# Вывод НЕ глушим: раньше ошибка запуска уходила в /dev/null, и наверху
-# появлялось только «cptr не отвечает» без причины. Самая частая причина —
-# shebang скрипта, указывающий на отсутствующий интерпретатор.
 CPTR_START_OUT="$("$HOME/start-cptr.sh" start 2>&1)"
 CPTR_START_RC=$?
 
@@ -503,14 +394,10 @@ else
   if (( CPTR_START_RC != 0 )); then
     printf '%s\n' "$CPTR_START_OUT" | sed 's/^/      /'
   fi
-  if ! command -v zsh >/dev/null 2>&1 && grep -q 'bad interpreter' <<<"$CPTR_START_OUT"; then
-    warn "скрипту нужен zsh, которого нет — установи его и запусти снова:"
-    warn "    sudo apt install -y zsh"
-  fi
   warn "смотри лог:  tail -30 /tmp/cptr.log"
 fi
 
-# ── 7b. пользователь cptr ────────────────────────────────────────────────────
+# ── 6b. пользователь cptr ────────────────────────────────────────────────────
 
 CPTR_USER=""
 if [[ -f "$HOME/.cptr/app.db" ]]; then
@@ -526,11 +413,8 @@ except Exception:
 fi
 
 if [[ -z "$CPTR_USER" ]]; then
-  step "7b/8  Нужен твой шаг: регистрация в cptr"
+  step "6b/10  Нужен твой шаг: регистрация в cptr"
 
-  # Токен есть только при первом запуске на чистой базе. Если cptr не поднялся,
-  # ссылки нет вовсе — раньше в этом случае печаталось «?token=» с пустым
-  # значением, и это выглядело как рабочая ссылка, хотя вела никуда.
   URL="$("$HOME/start-cptr.sh" url 2>/dev/null)"
   if [[ -z "$URL" ]]; then
     fail "cptr не запущен, поэтому ссылки для регистрации нет"
@@ -565,18 +449,22 @@ fi
 
 have "пользователь cptr заведён"
 
-# Настройки cptr в базу (модель для чата, профиль агента).
-"$SRC/setup-cptr.sh" 2>&1 | sed 's/^/      /'
+"$FILES/setup-cptr.sh" 2>&1 | sed 's/^/      /'
 if (( PIPESTATUS[0] != 0 )); then
   fail "не удалось записать настройки cptr — смотри вывод выше"
   exit 1
 fi
 
-# ── 8. Open WebUI ────────────────────────────────────────────────────────────
+# ── 7. Open WebUI ────────────────────────────────────────────────────────────
 
-step "8/8  Open WebUI (браузерный чат)"
+step "7/10  Open WebUI (браузерный чат)"
 
-ENV_FILE="$ZIM_DIR/openwebui/openwebui.env"
+ENV_FILE="$RUNTIME/openwebui/openwebui.env"
+
+# Имя, под которым модель видна в пикере Open WebUI. По умолчанию — имя
+# апстрима: за псевдонимом стоит DeepSeek, но Claude Code и Claude Desktop
+# уже показывают его как Opus, и разнобой в браузере только путает.
+MODEL_NAME="${ZIM_CLAUDE_MODEL_NAME:-Opus 5.5}"
 
 # WEBUI_SECRET_KEY подписывает сессионные куки Open WebUI. В наборе лежит
 # ключ Хейдена, а двум разным установкам он не нужен: сгенерируем свой. Делаем
@@ -587,7 +475,7 @@ if grep -q '^WEBUI_SECRET_KEY=$' "$ENV_FILE" 2>/dev/null; then
   SECRET="$(python3 -c 'import secrets; print(secrets.token_hex(32))')"
   python3 -I - "$ENV_FILE" "$SECRET" <<'PY'
 import pathlib, re, sys
-path, secret = pathlib.Path(sys.argv[1]), sys.argv[2]
+path, secret = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
 path.write_text(re.sub(r'^WEBUI_SECRET_KEY=.*$', f'WEBUI_SECRET_KEY={secret}',
                        path.read_text(), flags=re.M))
 PY
@@ -595,7 +483,7 @@ PY
 fi
 
 # API-ключ cptr создаём сами: он привязан к id пользователя, а JWT подписывается
-# секретом из config.toml. Так друг не проходит через админку руками.
+# секретом из config.toml. Так не нужно проходить через админку руками.
 #
 # KEY объявляем пустым заранее: при повторном запуске ключ уже прописан, ветка
 # else не выполняется, а ниже он всё равно подставляется в базу Open WebUI.
@@ -633,7 +521,7 @@ PY
   if [[ -n "$KEY" ]]; then
     python3 -I - "$ENV_FILE" "$KEY" <<'PY'
 import pathlib, re, sys
-path, key = pathlib.Path(sys.argv[1]), sys.argv[2]
+path, key = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
 text = path.read_text()
 if re.search(r'^OPENAI_API_KEY=.*$', text, flags=re.M):
     text = re.sub(r'^OPENAI_API_KEY=.*$', f'OPENAI_API_KEY={key}', text, flags=re.M)
@@ -653,7 +541,7 @@ fi
 if docker ps --format '{{.Names}}' | grep -qx open-webui; then
   have "контейнер уже запущен"
 else
-  ( cd "$ZIM_DIR/openwebui" && ./run-openwebui.sh ) 2>&1 | sed 's/^/      /'
+  ( cd "$RUNTIME/openwebui" && ./run-openwebui.sh ) 2>&1 | sed 's/^/      /'
   if (( PIPESTATUS[0] != 0 )); then
     fail "Open WebUI не запустился — смотри вывод выше"
     exit 1
@@ -680,13 +568,14 @@ for _ in $(seq 1 30); do
 done
 
 if (( WEBUI_SETTINGS_RC )); then
-  docker exec -i open-webui python - "$KEY" <<'PY' 2>&1 | sed 's/^/      /'
+  docker exec -i open-webui python - "$KEY" "$MODEL_NAME" <<'PY' 2>&1 | sed 's/^/      /'
 import json, os, sqlite3, sys
 
 # Ключ передаём аргументом, а если он пуст (создать не удалось) — берём из env
 # контейнера, чтобы не затереть уже рабочее значение пустым.
 key = sys.argv[1] if len(sys.argv) > 1 and sys.argv[1] else os.environ.get("OPENAI_API_KEY", "")
 base = os.environ.get("OPENAI_API_BASE_URL", "http://127.0.0.1:8100/v1")
+MODEL_NAME = sys.argv[2] if len(sys.argv) > 2 and sys.argv[2] else "Opus 5.5"
 
 con = sqlite3.connect("/app/backend/data/webui.db")
 now = __import__("time").time()
@@ -717,6 +606,40 @@ for k, v in rows.items():
         (k, v, now),
     )
     print(f"  ✓ {k}")
+
+# Пикер моделей показывает имя workspace'а — «Home - /home/<user>». Это имя
+# папки, а не модели: человеку оно ничего не говорит.
+#
+# Переименовываем на месте: запись в model с тем же id, что и у базовой
+# модели, и base_model_id = NULL. Open WebUI в этом случае НЕ добавляет
+# второй пункт, а подменяет name у существующего (utils/models.py: ветка
+# «Override applied directly to a base model»). С base_model_id = id
+# получился бы дубликат в списке — так делать не надо.
+#
+# Модель, за которой стоит cptr, — единственная в этом списке, поэтому
+# находим её по префиксу, а не по захардкоженному пути: папка у каждого своя.
+model_id = con.execute(
+    "select id from model where id like 'cptr/%' limit 1"
+).fetchone()
+if model_id is None:
+    print("  · модели cptr ещё нет — имя поправим при следующем запуске")
+else:
+    con.execute(
+        "INSERT INTO model (id, user_id, base_model_id, name, params, meta, "
+        "updated_at, created_at, is_active) VALUES (?, ?, NULL, ?, '{}', ?, ?, ?, 1) "
+        "ON CONFLICT(id) DO UPDATE SET name=excluded.name, meta=excluded.meta, "
+        "updated_at=excluded.updated_at",
+        (
+            model_id[0],
+            con.execute("select id from user limit 1").fetchone()[0],
+            MODEL_NAME,
+            json.dumps({"description": "Claude Code agent with full access to your home folder"}),
+            now,
+            now,
+        ),
+    )
+    print(f"  ✓ модель названа: {MODEL_NAME}")
+
 con.commit()
 PY
 
@@ -728,7 +651,129 @@ else
   todo "проверить настройки Open WebUI вручную (Настройки → Подключения)"
 fi
 
-# ── итог ─────────────────────────────────────────────────────────────────────
+# ── 8. ярлыки Windows ────────────────────────────────────────────────────────
+
+step "8/10  Ярлыки на рабочем столе Windows"
+
+# Ярлыки делает PowerShell-скрипт: из WSL виден рабочий стол через /mnt/c,
+# но .lnk — это COM-объект Windows, и собирать его бинарно руками незачем.
+POWERSHELL=/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe
+if [[ -x "$POWERSHELL" ]]; then
+  PS1_WIN="$(wslpath -w "$FILES/windows/create-shortcuts.ps1" 2>/dev/null || true)"
+  if [[ -z "$PS1_WIN" ]]; then
+    warn "не удалось перевести путь для Windows"
+    todo "запустить deploy/files/windows/create-shortcuts.ps1 вручную"
+  else
+    # Код возврата берём из PIPESTATUS: в конвейере с tr/sed он иначе всегда 0,
+    # и упавший PowerShell выглядел бы как успех.
+    "$POWERSHELL" -NoProfile -ExecutionPolicy Bypass -File "$PS1_WIN" 2>&1 \
+      | tr -d '\r' | sed 's/^/      /'
+    if (( PIPESTATUS[0] == 0 )); then
+      ok "ярлыки созданы"
+    else
+      warn "PowerShell завершился с ошибкой — смотри вывод выше"
+      todo "создать ярлыки вручную (deploy/files/windows/create-shortcuts.ps1)"
+    fi
+  fi
+else
+  have "Windows рядом не видно — ярлыки не нужны"
+fi
+
+# ── 9. автообновление набора ─────────────────────────────────────────────────
+
+step "9/10  Автообновление"
+
+# Набор — надстройка над zim-claude. Когда апстрим обновляется, его install.sh
+# переустанавливает своё и затирает то, что мы положили поверх (конфиг
+# LiteLLM с перехватом поиска — первым делом). Поэтому мало обновлять только
+# набор: после каждого обновления апстрима доработки надо наложить заново.
+#
+# Всё это делает zim-deploy-update.sh: сначала дёргает обновление zim-claude,
+# потом подтягивает себя, потом прогоняет deploy.sh. Скрипт кладём в
+# ~/.local/bin — оттуда его найдёт и ярлык, и человек.
+
+put_update_script() {
+  install -D -m 755 -- "$FILES/zim-deploy-update.sh" "$HOME/.local/bin/zim-deploy-update.sh" \
+    || { fail "не удалось положить zim-deploy-update.sh"; return 1; }
+  ok "zim-deploy-update.sh на месте"
+}
+
+if put_update_script; then
+  # Автообновление работает только по git-чекауту: обновлятор делает fetch и
+  # fast-forward, а с тарболом (как в инструкции «одна команда») этого не
+  # сделать. Поэтому если набор распакован, а не склонирован — клонируем его
+  # отдельно в ~/.zim-setup и дальше обновляем уже клон. Установка при этом
+  # продолжает идти из распакованного каталога: файлы те же.
+  UPDATE_CONF="$HOME/.local/share/zim-deploy/update.conf"
+  REPO_URL="${ZIM_DEPLOY_REPO_URL:-https://github.com/Hayden-Wright/Setup}"
+  REPO_SUBDIR="Claude-Code"
+  CLONE_DIR="${ZIM_DEPLOY_CLONE_DIR:-$HOME/.zim-setup}"
+
+  update_repo_dir="$SRC"
+  update_branch="$(git -C "$SRC" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+
+  if [[ ! -d "$SRC/.git" || -z "$update_branch" || "$update_branch" == "HEAD" ]]; then
+    have "набор распакован, а не склонирован — клонирую для автообновления"
+    if [[ -d "$CLONE_DIR/.git" ]]; then
+      update_branch="$(git -C "$CLONE_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)"
+      update_repo_dir="$CLONE_DIR"
+      ok "использую существующий клон: $CLONE_DIR"
+    elif git clone --quiet "$REPO_URL" "$CLONE_DIR" 2>/dev/null; then
+      update_branch="$(git -C "$CLONE_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)"
+      update_repo_dir="$CLONE_DIR"
+      ok "склонирован в $CLONE_DIR"
+    else
+      warn "склонировать не удалось — автообновление набора выключено"
+      todo "склонировать $REPO_URL вручную, если нужно автообновление"
+      update_repo_dir=""
+    fi
+  fi
+
+  if [[ -n "$update_repo_dir" ]]; then
+    mkdir -p "$(dirname "$UPDATE_CONF")"
+    {
+      printf '# Пишет install-stack.sh — читает zim-deploy-update.sh.\n'
+      printf 'ZIM_DEPLOY_AUTO_UPDATE=1\n'
+      printf 'ZIM_DEPLOY_REPO_DIR=%q\n' "$update_repo_dir"
+      printf 'ZIM_DEPLOY_REPO_BRANCH=%q\n' "$update_branch"
+      # deploy.sh лежит в корне клона репозитория Setup — во вложенной папке.
+      printf 'ZIM_DEPLOY_SUBDIR=%q\n' "$REPO_SUBDIR"
+    } >"$UPDATE_CONF"
+    chmod 600 -- "$UPDATE_CONF"
+    ok "автообновление включено ($update_branch в $update_repo_dir)"
+  fi
+
+  # Еженедельный запуск через cron — на случай, если человек неделю не
+  # открывал терминал. В терминале то же самое делает хук zim-claude, так что
+  # это подстраховка, а не основной путь. flock внутри скрипта не даст двум
+  # копиям работать одновременно.
+  if command -v crontab >/dev/null 2>&1; then
+    if crontab -l 2>/dev/null | grep -q 'zim-deploy-update.sh'; then
+      have "задание cron уже стоит"
+    else
+      # Путь абсолютный: cron запускает команду через sh и $HOME подставил бы,
+      # но с явным путём задание читается однозначно.
+      { crontab -l 2>/dev/null || true
+        printf '@daily %s >/dev/null 2>&1\n' "$HOME/.local/bin/zim-deploy-update.sh"
+      } | crontab - 2>/dev/null \
+        && ok "добавлено задание cron (@daily)" \
+        || have "cron недоступен — обновление будет при запуске терминала"
+    fi
+  fi
+fi
+
+# ── 10. PATH и итог ──────────────────────────────────────────────────────────
+
+step "10/10  PATH"
+
+# ~/.local/bin в ~/.bashrc прописывает install.sh; здесь страхуемся на случай,
+# если его запускали с --no-rc.
+if [[ -f "$HOME/.bashrc" ]] && ! grep -q '.local/bin' "$HOME/.bashrc"; then
+  printf '\nexport PATH="$HOME/.local/bin:$PATH"\n' >>"$HOME/.bashrc"
+  have "добавил ~/.local/bin в ~/.bashrc"
+else
+  have "PATH уже настроен"
+fi
 
 printf '\n%s────────────────────────────────────────────%s\n' "$D" "$N"
 if (( ${#TODO[@]} )); then

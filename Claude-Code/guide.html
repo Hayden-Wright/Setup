@@ -291,26 +291,29 @@
     <h1>Zim-стек с нуля</h1>
     <p class="lede">
       Терминальный Claude Code через локальный прокси и браузерный чат с доступом
-      к машине — на чистой WSL Ubuntu. Все ключи и адреса те же, что у Хейдена.
+      к машине — на чистой WSL Ubuntu. Надстройка над zim-claude: ставит то,
+      чего в нём нет.
     </p>
     <div class="meta">
-      <span>WSL2 · Ubuntu · zsh</span>
+      <span>WSL2 · Ubuntu · bash</span>
       <span>~20 минут</span>
       <span>5 шагов</span>
-      <span>архив 41 КБ</span>
+      <span>один скрипт</span>
     </div>
   </header>
 
   <div class="callout">
     <strong>Сначала про ключ</strong>
     <p>
-      Ключ Token Juice (<code>tj_…</code>) лежит открытым текстом в файле
-      <code>config/token</code> публичного репозитория
-      <code>Mr-Destroyer/zim-claude</code> — он отдаётся наружу по прямой ссылке,
-      это проверено запросом. Ключ будет прописан на обеих машинах и оплачивается
-      с одного счёта: расход и лимиты общие. Смени его в Token Juice и подставь
-      новый в <code>~/claude-source/deepseek-claude</code> на обеих машинах —
-      иначе лимит может закончиться не у тебя.
+      Ключа в репозитории нет и не будет. Ключ Token Juice (<code>tj_…</code>)
+      спросит установщик zim-claude — ввод скрыт, в историю команд он не
+      попадает. Свой ключ берётся в личном кабинете
+      <a href="https://tokenjuice.ai">Token Juice</a>: расход и лимиты у
+      каждого свои, чужие ключи не используются.
+    </p>
+    <p>
+      Для неинтерактивной установки ключ можно передать переменной:
+      <code>ZIM_CLAUDE_TOKEN=tj_… ./install-stack.sh</code>.
     </p>
   </div>
 
@@ -351,10 +354,9 @@
   <section>
     <h2>Установка</h2>
     <p>
-      Один скрипт ставит всё: пакеты, Docker, Claude Code, zim-claude, твои
-      доработки, SearxNG, cptr и Open WebUI. Он же создаёт ключи — токен
-      Token Juice берётся из репозитория zim-claude, а ключ доступа Open WebUI
-      к агенту генерируется свой.
+      Один скрипт ставит всё: пакеты, Docker, Claude Code, zim-claude,
+      доработки, SearxNG, cptr и Open WebUI. Ключ Token Juice он спросит,
+      а ключ доступа Open WebUI к агенту сгенерирует сам.
     </p>
 
     <div class="step">
@@ -402,7 +404,7 @@ cd zim-setup</code></pre></div>
           Одна команда. Скрипт сам поймёт, что уже установлено, и спросит
           пароль от системы только когда понадобится ставить пакеты.
         </p>
-        <div class="cmd"><button class="copy" type="button">копировать</button><pre><code>./install-friend.sh</code></pre></div>
+        <div class="cmd"><button class="copy" type="button">копировать</button><pre><code>./install-stack.sh</code></pre></div>
         <div class="callout ok">
           <strong>Скрипт можно запускать сколько угодно раз</strong>
           <p>
@@ -431,7 +433,7 @@ cd zim-setup</code></pre></div>
         <p class="note">
           Логин и пароль локальные: это вход в программу на своём компьютере,
           никуда они не отправляются. После регистрации запусти
-          <code>./install-friend.sh</code> ещё раз — скрипт доделает остальное:
+          <code>./install-stack.sh</code> ещё раз — скрипт доделает остальное:
           настроит агента и поднимет Open WebUI.
         </p>
       </div>

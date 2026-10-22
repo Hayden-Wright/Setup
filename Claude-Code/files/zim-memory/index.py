@@ -33,8 +33,8 @@ DB = Path(os.environ.get("ZIM_MEMORY_DB", CLAUDE / "zim-memory" / "memory.db"))
 PROJECTS_DIR = CLAUDE / "projects"
 
 # Папки памяти Claude Code лежат внутри projects/<слаг-каталога>/memory, и
-# слаг зависит от того, откуда запущен Claude Code (`-home-hayden` против
-# `-home-hayden-zim-claude` — это РАЗНЫЕ каталоги с разной памятью).
+# слаг зависит от того, откуда запущен Claude Code (`-home-<user>` против
+# `-home-<user>-zim-claude` — это РАЗНЫЕ каталоги с разной памятью).
 # Поэтому не зашиваем один слаг, а обходим все: иначе заметки, которые
 # сессия реально грузит, в индекс не попадают.
 MEMORY_DIRS = sorted(PROJECTS_DIR.glob("*/memory"))

@@ -1,22 +1,34 @@
 #!/usr/bin/env bash
 # deploy.sh — раскатать доработки поверх установленного zim-claude.
 #
-# Запускать ПОСЛЕ того, как отработал install.sh из репозитория zim-claude:
-# он ставит сам CLI и оба прокси, а этот скрипт добавляет то, чего в
-# репозитории нет — веб-поиск через SearxNG, zim-memory, конфиги Open WebUI
-# и cptr.
+# Запускать ПОСЛЕ install.sh из корня репозитория: он ставит CLI и прокси, а
+# этот скрипт добавляет то, чего в нём нет — перехват веб-поиска, zim-memory,
+# настройки Claude Code и конфиги браузерной половины.
 #
 #   ./deploy.sh              — установить / обновить
 #   ./deploy.sh --dry-run    — показать, что будет сделано
 #
 # Всё, что перезаписывается, сохраняется рядом с меткой времени.
-# Никакие ключи здесь не генерируются: env-профиль и конфиги копируются как
-# есть, поэтому ключ Token Juice остаётся тем же.
+# Никакие ключи здесь не генерируются: профиль ~/tokenjuice/source не
+# трогается вовсе, поэтому ключ Token Juice остаётся тем же.
 
 set -euo pipefail
 
 SRC="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 FILES="$SRC/files"
+
+# Каталог zim-claude (чекаут Mr-Destroyer/zim-claude). Только ЧИТАЕМ и только
+# ради его собственных файлов — claude-desktop-integration. Ничего сюда не
+# пишем: чекаут обновляется автообновлением по fast-forward, и любой наш файл
+# внутри него рано или поздно упрётся в «untracked file would be overwritten»,
+# после чего обновления встанут навсегда.
+ZIM_CLAUDE_DIR="${ZIM_CLAUDE_DIR:-$HOME/zim-claude}"
+
+# Сюда складывается всё, что принадлежит этому набору: конфиг Open WebUI,
+# патчи cptr. Отдельно от чекаутов — и апстрима, и нашего.
+RUNTIME="${ZIM_CLAUDE_RUNTIME_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/zim-claude}"
+
+TOKENJUICE_DIR="${ZIM_CLAUDE_TOKENJUICE_DIR:-$HOME/tokenjuice}"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 DRY=0
 [[ "${1:-}" == "--dry-run" ]] && DRY=1
@@ -45,13 +57,12 @@ put() {
 
 # put_env <источник> <назначение> — как put, но значения ключей, которые уже
 # есть в файле-назначении, остаются: шаблон их оставляет пустыми, а заполняет
-# их install-friend.sh под конкретную машину.
+# их install-stack.sh под конкретную машину.
 #
 # Без этого повторный запуск затирал бы openwebui.env шаблоном: WEBUI_SECRET_KEY
 # и OPENAI_API_KEY снова оказывались пустыми, скрипт генерировал НОВЫЙ секрет
 # сессий (все, кто был в чате, разлогинивались) и создавал в cptr второй ключ
-# при живом первом. Остальные строки — переменные образа — обновляются как
-# обычно, чтобы шаблон оставался источником правды.
+# при живом первом.
 put_env() {
   local src="$1" dst="$2" mode="${3:-644}" k
   if [[ "$DRY" == "1" ]]; then
@@ -86,90 +97,214 @@ PY
 [[ -d "$FILES" ]] || { log "нет каталога files/ рядом со скриптом"; exit 1; }
 
 command -v claude >/dev/null 2>&1 \
-  || log "внимание: claude не найден на PATH — сначала install.sh из zim-claude"
+  || log "внимание: claude не найден на PATH — сначала install.sh"
 
-if [[ ! -f "$HOME/claude-source/deepseek-claude" ]]; then
-  log "внимание: нет ~/claude-source/deepseek-claude — его создаёт install.sh."
-  log "          кладу свой, но проверь, что ключ Token Juice верный."
+if [[ ! -f "$TOKENJUICE_DIR/source" ]]; then
+  log "внимание: нет $TOKENJUICE_DIR/source — его создаёт install.sh."
+  log "          без него прокси не поднимется (ключ берётся оттуда)."
 fi
 
-# ---------------------------------------------------------------- zim-claude
+# ---------------------------------------------------------------- прокси
 
-log "1/4  zim-claude: конфиги прокси и перехват веб-поиска"
-put "$FILES/claude-source/deepseek-claude"   "$HOME/claude-source/deepseek-claude" 600
-put "$FILES/litellm-config.yaml"             "$HOME/litellm-config.yaml"
-put "$FILES/drop_anthropic_only.py"          "$HOME/drop_anthropic_only.py"
+log "1/4  прокси: веб-поиск и вырезание Anthropic-only полей"
 
-# Модуль-колбэк LiteLLM подхватывает из ТЕКУЩЕГО каталога процесса, а не из
-# конфига: `callbacks: ["drop_anthropic_only.proxy_handler_instance"]` — это
-# обычный import по имени. Оба прокси стартуют из каталога интеграции, поэтому
-# вторая копия обязана лежать именно там, иначе CLI-прокси упадёт на импорте.
-put "$FILES/drop_anthropic_only.py"          "$HOME/zim-claude/claude-desktop-integration/drop_anthropic_only.py"
-put "$FILES/litellm-config.desktop.yaml"     "$HOME/zim-claude/claude-desktop-integration/litellm-config.desktop.yaml"
+# Конфиги читаются из ~/tokenjuice/ — там же, где профиль с ключом. Модель
+# внутри уже new: deepseek-v4.1-flash-1017 под Token Juice.
+put "$FILES/litellm-config.yaml"          "$TOKENJUICE_DIR/litellm-config.yaml"
+put "$FILES/litellm-config.desktop.yaml"  "$TOKENJUICE_DIR/litellm-config.desktop.yaml"
+
+# Колбэк LiteLLM грузит как модуль из каталога КОНФИГА (get_instance_fn:
+# spec_from_file_location по os.path.dirname(config_file_path)), а при
+# неудаче — обычным import из текущего каталога. Конфиг всегда лежит в
+# ~/tokenjuice/, поэтому копия обязана быть там же.
+#
+# Вторую копию в чекаут zim-claude не кладём намеренно: файл был бы
+# untracked внутри чужого репозитория, и появление такого пути в апстриме
+# сломало бы fast-forward. Запасной путь start-desktop-proxy.sh (конфиг
+# рядом со скриптом) работает только на свежем клоне до первого deploy.sh,
+# и колбэк там всё равно не нужен.
+put "$FILES/drop_anthropic_only.py" "$TOKENJUICE_DIR/drop_anthropic_only.py"
 
 # ---------------------------------------------------------------- zim-memory
 
 log "2/4  zim-memory: поиск по заметкам и истории сессий"
-put "$FILES/zim-memory/index.py"             "$HOME/.claude/zim-memory/index.py"
+put "$FILES/zim-memory/index.py"              "$HOME/.claude/zim-memory/index.py"
 put "$FILES/zim-memory/hook-session-start.sh" "$HOME/.claude/zim-memory/hook-session-start.sh" 755
-put "$FILES/zim-memory/zim-memory"           "$HOME/.local/bin/zim-memory" 755
+put "$FILES/zim-memory/zim-memory"            "$HOME/.local/bin/zim-memory" 755
+
+# Обновлятор набора. Его дёргает хук SessionStart выше, поэтому файл должен
+# быть на месте до того, как хук начнёт работать.
+put "$FILES/zim-deploy-update.sh"             "$HOME/.local/bin/zim-deploy-update.sh" 755
+
+# ---------------------------------------------------------------- переезд
+
+# Раньше эти файлы лежали ВНУТРИ чекаута zim-claude (~/zim-claude/openwebui/,
+# ~/zim-claude/patches/). Теперь они в $RUNTIME, а из чекаута их надо убрать:
+# untracked-файл там — это мина замедленного действия, при появлении такого
+# пути в апстриме fast-forward упадёт с «would be overwritten».
+#
+# Не удаляем, а переносим: в старом openwebui.env лежат РАБОЧИЕ ключи этой
+# машины (сессии Open WebUI и ключ cptr), и потерять их значит разлогинить
+# человека и сломать связь с агентом.
+migrate_legacy() {
+  local legacy_openwebui="$ZIM_CLAUDE_DIR/openwebui"
+  local legacy_patches="$ZIM_CLAUDE_DIR/patches"
+  local legacy_cb="$ZIM_CLAUDE_DIR/claude-desktop-integration/drop_anthropic_only.py"
+  local moved=0 f
+
+  if [[ -f "$legacy_openwebui/openwebui.env" && ! -f "$RUNTIME/openwebui/openwebui.env" ]]; then
+    if [[ "$DRY" == "1" ]]; then
+      log "перенёс бы ключи из ${legacy_openwebui/#$HOME/~} в ${RUNTIME/#$HOME/~}"
+    else
+      mkdir -p "$RUNTIME/openwebui"
+      mv -- "$legacy_openwebui/openwebui.env" "$RUNTIME/openwebui/openwebui.env"
+      chmod 600 -- "$RUNTIME/openwebui/openwebui.env"
+      ok "ключи перенесены из ${legacy_openwebui/#$HOME/~} в ${RUNTIME/#$HOME/~}"
+    fi
+    moved=1
+  fi
+
+  # Остатки прежних раскладок: бэкапы ключей и скрипт запуска.
+  for f in "$legacy_openwebui"/*.bak-* "$legacy_openwebui/run-openwebui.sh"; do
+    [[ -e "$f" ]] || continue
+    if [[ "$DRY" == "1" ]]; then
+      log "убрал бы из чекаута: ${f/#$HOME/~}"
+    else
+      rm -f -- "$f"
+      moved=1
+    fi
+  done
+  for f in "$legacy_patches"/*.patch; do
+    [[ -e "$f" ]] || continue
+    if [[ "$DRY" == "1" ]]; then
+      log "убрал бы из чекаута: ${f/#$HOME/~}"
+    else
+      rm -f -- "$f"
+      moved=1
+    fi
+  done
+  if [[ -f "$legacy_cb" ]]; then
+    if [[ "$DRY" == "1" ]]; then
+      log "убрал бы из чекаута: ${legacy_cb/#$HOME/~}"
+    else
+      rm -f -- "$legacy_cb"
+      moved=1
+    fi
+  fi
+
+  # Пустые каталоги в чужом репозитории тоже не нужны.
+  if [[ "$DRY" == "0" ]]; then
+    rmdir -- "$legacy_openwebui" "$legacy_patches" 2>/dev/null || true
+  fi
+
+  (( moved )) || skip "чекаут zim-claude уже чист"
+}
+
+if [[ -d "$ZIM_CLAUDE_DIR/.git" ]]; then
+  migrate_legacy
+fi
 
 # ---------------------------------------------------------------- прочее
 
 log "3/4  SearxNG, Open WebUI, cptr"
-put "$FILES/searxng-settings.yml"            "$HOME/.config/zim-claude/searxng/settings.yml"
-put_env "$FILES/openwebui/openwebui.env"     "$HOME/zim-claude/openwebui/openwebui.env" 600
-put "$FILES/openwebui/run-openwebui.sh"      "$HOME/zim-claude/openwebui/run-openwebui.sh" 755
+put "$FILES/searxng-settings.yml"            "$RUNTIME/searxng/settings.yml"
+put_env "$FILES/openwebui/openwebui.env"     "$RUNTIME/openwebui/openwebui.env" 600
+put "$FILES/openwebui/run-openwebui.sh"      "$RUNTIME/openwebui/run-openwebui.sh" 755
 put "$FILES/start-cptr.sh"                   "$HOME/start-cptr.sh" 755
 put "$FILES/start-all.sh"                    "$HOME/start-all.sh" 755
-put "$FILES/cptr-patches/gateway-images.patch"        "$HOME/zim-claude/patches/gateway-images.patch"
-put "$FILES/cptr-patches/config-multiline-toml.patch" "$HOME/zim-claude/patches/config-multiline-toml.patch"
+put "$FILES/cptr-patches/gateway-images.patch"        "$RUNTIME/patches/gateway-images.patch"
+put "$FILES/cptr-patches/config-multiline-toml.patch" "$RUNTIME/patches/config-multiline-toml.patch"
 
-# ---------------------------------------------------------------- хук
+# ---------------------------------------------------------------- Claude Code
 
-log "4/4  хук SessionStart (доиндексация памяти при старте)"
-SETTINGS="$HOME/.claude/settings.json"
+log "4/4  настройки Claude Code (права, хук памяти, MCP)"
+
+# settings.json: НЕ затираем целиком — у тебя там свои ключи (тема, флаги).
+# Добавляем/обновляем только то, чем управляет этот скрипт: permissions и
+# хук SessionStart.
 if [[ "$DRY" == "1" ]]; then
-  log "проверил бы хук в ${SETTINGS/#$HOME/~}"
+  log "смержил бы permissions и хук SessionStart в ~/.claude/settings.json"
 else
-  mkdir -p "$HOME/.claude"
-  python3 -I - "$SETTINGS" "$FILES/claude-settings.json" <<'PY'
+  python3 -I - "$HOME/.claude/settings.json" "$FILES/claude-settings.json" <<'PY'
 import json, pathlib, sys
 
 target, source = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
-want = json.loads(source.read_text())["hooks"]
+want = json.loads(source.read_text())
 
+target.parent.mkdir(parents=True, exist_ok=True)
 if target.exists():
     try:
         data = json.loads(target.read_text())
     except ValueError:
-        print("  settings.json не парсится — оставляю как есть, добавь хук вручную")
+        print("  ! settings.json не парсится — оставляю как есть")
         raise SystemExit(0)
 else:
     data = {}
 
-# Не затираем чужие хуки: заменяем только SessionStart.
+changed = []
+
+# permissions: allow-список объединяем с существующим, deny не трогаем.
+if "permissions" in want:
+    perms = data.setdefault("permissions", {})
+    allow = perms.setdefault("allow", [])
+
+    # Старые версии набора разрешали запуск скрипта по пути ВНУТРИ чекаута
+    # zim-claude. Скрипт переехал в ~/.config/zim-claude, и разрешение на
+    # старый путь больше ничего не открывает — убираем, иначе оно копится
+    # у всех, кто ставил раньше.
+    stale = "Bash(/home/*/zim-claude/openwebui/run-openwebui.sh:*)"
+    if stale in allow:
+        allow.remove(stale)
+        changed.append("устаревшее разрешение")
+
+    added = False
+    for entry in want["permissions"].get("allow", []):
+        if entry not in allow:
+            allow.append(entry)
+            added = True
+    if added:
+        changed.append("permissions")
+    perms.setdefault("deny", want["permissions"].get("deny", []))
+
+# Хук заменяем только SessionStart, чужие хуки не трогаем.
 hooks = data.setdefault("hooks", {})
-if hooks.get("SessionStart") == want["SessionStart"]:
-    print("  · хук уже стоит")
-else:
+if hooks.get("SessionStart") != want["hooks"]["SessionStart"]:
     if "SessionStart" in hooks:
-        target.with_suffix(f".json.bak-hook").write_text(target.read_text())
-    hooks["SessionStart"] = want["SessionStart"]
+        target.with_suffix(".json.bak-hook").write_text(target.read_text())
+    hooks["SessionStart"] = want["hooks"]["SessionStart"]
+    changed.append("SessionStart hook")
+
+if changed:
     target.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n")
-    print("  ✓ хук прописан в settings.json")
+    print(f"  ✓ обновлено: {', '.join(changed)}")
+else:
+    print("  · настройки уже на месте")
 PY
+fi
+
+# MCP deploychan — публичный read-only сервер подборки знаний.
+# User scope: виден из любого каталога, а не только из этого.
+if command -v claude >/dev/null 2>&1; then
+  if claude mcp list 2>/dev/null | grep -q '^deploychan'; then
+    skip "MCP deploychan уже подключён"
+  elif [[ "$DRY" == "1" ]]; then
+    log "подключил бы MCP deploychan (user scope)"
+  else
+    claude mcp add --transport http --scope user deploychan https://mcp.deploychan.webcam/mcp \
+      >/dev/null 2>&1 && ok "MCP deploychan подключён" \
+      || log "не удалось подключить deploychan — добавь вручную: claude mcp add --transport http --scope user deploychan https://mcp.deploychan.webcam/mcp"
+  fi
 fi
 
 # ---------------------------------------------------------------- итог
 
 if [[ "$DRY" == "0" ]]; then
   log "готово. Дальше:"
-  cat <<'EOF'
+  cat <<EOF
 
   1. Перезапустить прокси:      ~/.local/bin/start-litellm.sh restart
-  2. Перезапустить Desktop-шлюз (если нужен):
-        cd ~/zim-claude/claude-desktop-integration && ./start-desktop-proxy.sh restart
+  2. Перезапустить Desktop-шлюз:
+        cd ${ZIM_CLAUDE_DIR/#$HOME/~}/claude-desktop-integration && ./start-desktop-proxy.sh restart
   3. Открыть НОВЫЙ терминал (подхватить PATH и ~/.local/bin/zim-memory)
   4. Проверить:                 zim-memory stats
 

@@ -1,7 +1,24 @@
+# zim-claude · LiteLLM config for the Token Juice route
+#
+#   Claude Code (Anthropic /v1/messages) --▶ LiteLLM :4000 --▶ Token Juice (OpenAI)
+#
+# This is the deployed copy: deploy.sh writes it to
+# ~/tokenjuice/litellm-config.yaml. It is the same file the CLI proxy reads.
+#
+#   config dir   ${ZIM_CLAUDE_TOKENJUICE_DIR:-$HOME/tokenjuice}
+#   this file    <config dir>/litellm-config.yaml
+#   profile      <config dir>/source
+#
+# The alias and the upstream id must agree with ANTHROPIC_MODEL in the profile:
+# Token Juice rotates the snapshot suffix, and a stale one fails as a bare
+# 404 "Model not found". Re-read the live catalog before changing it:
+#
+#   curl -s https://api.tokenjuice.ai/v1/models -H "Authorization: Bearer $ANTHROPIC_AUTH_TOKEN"
+
 model_list:
-  - model_name: deepseek-v4.1-flash
+  - model_name: deepseek-v4.1-flash-1017
     litellm_params:
-      model: openai/deepseek-ai/DeepSeek-V4.1-Flash
+      model: openai/deepseek-ai/DeepSeek-V4.1-Flash-1017
       api_base: https://api.tokenjuice.ai/v1
       api_key: os.environ/ANTHROPIC_AUTH_TOKEN
 
@@ -44,12 +61,10 @@ litellm_settings:
     search_tool_name: local-searxng
     enabled_providers: ["openai"]
 
-# LiteLLM >= 1.104.0 refuses to boot a proxy with no master key (an
-# unauthenticated proxy relaying to a paid upstream is an open relay).
-#
-# The master key MUST be the token Claude Code already sends as
-# `Authorization: Bearer ...` — that is ANTHROPIC_AUTH_TOKEN, set by
-# install.sh in the env file. Any other value would start the proxy but
-# 401 every request. os.environ/ keeps the secret out of this file.
 general_settings:
+  # Required since litellm 1.104: without a master key the proxy refuses to
+  # start. The profile's own upstream token doubles as the proxy credential —
+  # zim-claude already sends it as the bearer token, so the request that worked
+  # before keeps working, while anything else on the box that finds the port is
+  # rejected.
   master_key: os.environ/ANTHROPIC_AUTH_TOKEN

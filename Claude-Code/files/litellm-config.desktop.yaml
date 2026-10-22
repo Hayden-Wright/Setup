@@ -6,7 +6,11 @@
 #   LiteLLM :4002   (this config, started by start-desktop-proxy.sh)
 #        |  OpenAI-style
 #        v
-#   Token Juice  ->  DeepSeek-V4.1-Flash
+#   Token Juice  ->  DeepSeek-V4.1-Flash-1017
+#
+# Deployed copy: deploy.sh writes it to ~/tokenjuice/litellm-config.desktop.yaml
+# and to ~/zim-claude/claude-desktop-integration/ (the proxy loads
+# drop_anthropic_only.py as a module from the directory it runs in).
 #
 # Claude Desktop imposes two hard requirements on the gateway:
 #
@@ -14,54 +18,46 @@
 #      (contain "claude" or "anthropic"). Anything else is dropped
 #      from the picker with:
 #        inferenceModels: "X" is not an Anthropic model and was removed...
-#      That is why DeepSeek is exposed under claude-* names below.
+#      That is why DeepSeek is exposed under a claude-* name below.
 #
 #   2. drop_params: true — Cowork/Code sessions send Anthropic-only
 #      fields (cache_control, tool_reference, experimental beta
 #      headers) that a non-Anthropic upstream rejects with HTTP 400.
 #
 # The api_key is read from the environment; start-desktop-proxy.sh sources
-# ~/claude-source/deepseek-claude so ANTHROPIC_AUTH_TOKEN holds your
-# Token Juice key (same secret the zim-claude CLI proxy uses).
+# ~/tokenjuice/source so ANTHROPIC_AUTH_TOKEN holds the Token Juice key.
 
 model_list:
   # DeepSeek-V4.1-Flash behind an Opus-shaped name so the Desktop picker
-  # accepts it and shows it as an Opus-tier model.
+  # accepts it and shows it as an Opus-tier model. The upstream id carries a
+  # snapshot suffix Token Juice rotates; re-read the live catalog before
+  # changing it:
+  #   curl -s https://api.tokenjuice.ai/v1/models -H "Authorization: Bearer $ANTHROPIC_AUTH_TOKEN"
   #
-  # additional_drop_params — обязателен для Claude Code >= 2.1.169.
-  # Новый CLI всегда шлёт
-  #     thinking: {"type": "adaptive", "display": "omitted"}
-  # (adaptive thinking — фича моделей Anthropic 4.6+). LiteLLM решает,
-  # выкидывать ли это поле, по своей карте моделей, а
-  # `openai/deepseek-ai/DeepSeek-V4.1-Flash` ей неизвестен — поэтому поле
-  # проходит насквозь в OpenAI-апстрим, который отвечает
-  #     400 {"message":"Invalid request","type":"Bad Request"}
-  # `drop_params: true` тут НЕ помогает: он выкидывает только те параметры,
-  # которые LiteLLM опознал как чужие, а `thinking` он считает своим.
-  # Проверено бисекцией: с `thinking` -> 400, без него -> 200.
+  # The `thinking` field is removed by drop_anthropic_only.py — drop_params
+  # alone does not help, because LiteLLM considers `thinking` its own.
   - model_name: claude-opus-5-5
     litellm_params:
-      model: openai/deepseek-ai/DeepSeek-V4.1-Flash
+      model: openai/deepseek-ai/DeepSeek-V4.1-Flash-1017
       api_base: https://api.tokenjuice.ai/v1
       api_key: os.environ/ANTHROPIC_AUTH_TOKEN
       drop_params: true
 
-
   # --- Optional extra tiers -------------------------------------------------
-  # Uncomment any of these to expose the SAME DeepSeek upstream under more
-  # picker entries. Handy if a Cowork/Code background task asks for a
+  # Token Juice serves exactly one chat model, so every tier is an alias onto
+  # the same upstream. Uncomment if a Cowork/Code background task asks for a
   # Sonnet- or Haiku-tier model by name.
   #
   # - model_name: claude-sonnet-4-5
   #   litellm_params:
-  #     model: openai/deepseek-ai/DeepSeek-V4.1-Flash
+  #     model: openai/deepseek-ai/DeepSeek-V4.1-Flash-1017
   #     api_base: https://api.tokenjuice.ai/v1
   #     api_key: os.environ/ANTHROPIC_AUTH_TOKEN
   #     drop_params: true
   #
   # - model_name: claude-haiku-4-5
   #   litellm_params:
-  #     model: openai/deepseek-ai/DeepSeek-V4.1-Flash
+  #     model: openai/deepseek-ai/DeepSeek-V4.1-Flash-1017
   #     api_base: https://api.tokenjuice.ai/v1
   #     api_key: os.environ/ANTHROPIC_AUTH_TOKEN
   #     drop_params: true
@@ -74,9 +70,6 @@ model_list:
 #
 # enabled_providers обязателен: по умолчанию перехват только для bedrock,
 # а модель выше объявлена как openai/... — без этой строки 400 возвращается.
-#
-# SearxNG: докер-контейнер `searxng`, порт 8888, ключи не нужны.
-# Конфиг: ~/.config/zim-claude/searxng/settings.yml
 search_tools:
   - search_tool_name: local-searxng
     litellm_params:
