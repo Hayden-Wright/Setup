@@ -14,12 +14,14 @@
 #   3. Ставит Python-библиотеки в user-site через uv (системный pip не работает).
 #   4. Подключает маркетплейсы плагинов Anthropic.
 #   5. Ставит плагины: superpowers, example-skills, document-skills,
-#      claude-md-management, context7, playwright.
-#   6. Подключает MCP deploychan (без ключей).
-#   7. Кладёт CLAUDE.md в ~/.claude, если его ещё нет.
+#      claude-md-management, context7.
+#   6. Ставит Playwright MCP: браузер в ~/.cache, системные библиотеки —
+#      распаковкой deb в ~/.local (sudo не нужен), плюс обёртку в PATH.
+#   7. Подключает MCP deploychan (без ключей).
+#   8. Кладёт CLAUDE.md в ~/.claude, если его ещё нет.
 #
-# Ничего не затирается: существующие конфиги бэкапятся, а уже установленное
-# пропускается. Повторный запуск безопасен.
+# Ничего не затирается: уже установленное пропускается. Повторный запуск
+# безопасен.
 #
 # Без sudo. Всё ставится в $HOME.
 
@@ -31,11 +33,15 @@ NODE_TARBALL="node-${NODE_VERSION}-linux-x64.tar.xz"
 NODE_URL="https://nodejs.org/dist/${NODE_VERSION}/${NODE_TARBALL}"
 NODE_SHA_URL="https://nodejs.org/dist/${NODE_VERSION}/SHASUMS256.txt"
 
-PY_SITE="$HOME/.local/lib/python3.14/site-packages"
 LOCAL_BIN="$HOME/.local/bin"
+CHROMIUM_LIBS="$HOME/.local/lib/chromium-deps"
 CLAUDE_DIR="$HOME/.claude"
 
 REPO_RAW="https://raw.githubusercontent.com/Hayden-Wright/Setup/main/Configs/Agents"
+
+# PATH нужен сразу: node/npx/uv могут быть уже установлены, но не видны
+# в неинтерактивном шелле (например, при запуске из-под curl | bash).
+export PATH="$LOCAL_BIN:$PATH"
 
 # --- вывод -------------------------------------------------------------------
 if [[ -t 1 ]]; then
@@ -58,7 +64,7 @@ soft_fail() { fail "$*"; FAILED=$((FAILED+1)); }
 step "Проверка окружения"
 
 if [[ "$(uname -s)" != "Linux" ]]; then
-  die "Этот скрипт для Linux/WSL. Для Windows-конфигов — install.ps1."
+  die "Этот скрипт для Linux/WSL. Для Windows — Configs/Windows-Terminal/install.ps1."
 fi
 if grep -qi microsoft /proc/version 2>/dev/null; then
   ok "WSL обнаружен"
@@ -79,20 +85,27 @@ else
   SKIP_CLAUDE=1
 fi
 
-mkdir -p "$LOCAL_BIN" "$PY_SITE"
+# Путь user-site зависит от версии python — спрашиваем у самого python.
+# Важно: site.getusersitepackages(), а не sys.prefix (тот даёт /usr, и запись
+# туда падает с Permission denied).
+PY_SITE="$(python3 -c 'import site; print(site.getusersitepackages())' 2>/dev/null || true)"
+if [[ -z "$PY_SITE" ]]; then
+  PY_SITE="$HOME/.local/lib/python3.14/site-packages"
+  warn "не определил user-site python3, беру $PY_SITE"
+fi
 
-# PATH: дописываем в профиль, если наших путей там нет.
+mkdir -p "$LOCAL_BIN" "$PY_SITE" || die "Не могу создать $LOCAL_BIN или $PY_SITE — проверь права на \$HOME."
+
+# PATH: дописываем в ~/.bashrc, если наших путей там нет.
 add_to_path() {
-  local line='export PATH="$HOME/.local/bin:$PATH"'
-  local files=("$HOME/.bashrc" "$HOME/.profile")
-  for f in "${files[@]}"; do
-    [[ -f "$f" ]] || continue
-    grep -qF '.local/bin' "$f" && return 0
-  done
+  local marker='.local/bin'
+  if grep -qF "$marker" "$HOME/.bashrc" 2>/dev/null; then
+    return 0
+  fi
   {
     echo
     echo "# >>> Setup: PATH >>>"
-    echo "$line"
+    echo 'export PATH="$HOME/.local/bin:$PATH"'
     echo "# <<< Setup: PATH <<<"
   } >> "$HOME/.bashrc"
   ok "PATH дописан в ~/.bashrc"
@@ -107,10 +120,10 @@ elif command -v node >/dev/null 2>&1; then
   warn "Node $(node -v) уже стоит — не трогаю. Нужен ${NODE_VERSION}, если что-то сломается."
 else
   tmp="$(mktemp -d)"
-  trap 'rm -rf "$tmp"' RETURN
   echo "  качаю ${NODE_TARBALL}..."
   if ! curl -fsSL "$NODE_URL" -o "$tmp/$NODE_TARBALL"; then
     soft_fail "Не скачался Node. Пропускаю npm/npx."
+    rm -rf "$tmp"
   else
     # Проверка контрольной суммы — без неё качать бинарники не стоит.
     if curl -fsSL "$NODE_SHA_URL" -o "$tmp/SHASUMS256.txt" 2>/dev/null; then
@@ -119,16 +132,21 @@ else
       if [[ -n "$expected" && "$expected" == "$actual" ]]; then
         ok "Контрольная сумма совпала"
       else
+        rm -rf "$tmp"
         die "Контрольная сумма НЕ совпала. Файл повреждён или подменён — прерываю."
       fi
     else
       warn "SHASUMS256.txt недоступен, пропускаю проверку"
     fi
-    tar -xJf "$tmp/$NODE_TARBALL" -C "$tmp" || die "Не распаковался Node"
-    cp -r "$tmp/node-${NODE_VERSION}-linux-x64/." "$HOME/.local/" || die "Не скопировался Node"
-    export PATH="$LOCAL_BIN:$PATH"
-    ok "Node $(node -v), npm $(npm -v)"
-    add_to_path
+    if tar -xJf "$tmp/$NODE_TARBALL" -C "$tmp"; then
+      cp -r "$tmp/node-${NODE_VERSION}-linux-x64/." "$HOME/.local/" || soft_fail "Не скопировался Node"
+      hash -r 2>/dev/null || true
+      ok "Node $(node -v), npm $(npm -v)"
+      add_to_path
+    else
+      soft_fail "Не распаковался Node"
+    fi
+    rm -rf "$tmp"
   fi
 fi
 
@@ -139,7 +157,7 @@ if command -v uv >/dev/null 2>&1; then
   skip "$(uv --version)"
 else
   if curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1; then
-    export PATH="$LOCAL_BIN:$PATH"
+    hash -r 2>/dev/null || true
     if command -v uv >/dev/null 2>&1; then
       ok "$(uv --version)"
       add_to_path
@@ -188,6 +206,94 @@ else
   warn "uv нет — Python-библиотеки пропущены"
 fi
 
+# --- Playwright ---------------------------------------------------------------
+# Отдельная история: MCP-сервер Playwright не идёт в комплекте с браузером,
+# а браузеру нужны системные библиотеки (libnss3, libnspr4, libasound2),
+# которых в голом WSL нет. sudo недоступен, поэтому распаковываем deb-пакеты
+# в ~/.local и подключаем их только процессу браузера через LD_LIBRARY_PATH.
+install_playwright() {
+  step "Playwright (браузер + MCP)"
+
+  if ! command -v npx >/dev/null 2>&1; then
+    warn "npx нет — Playwright пропущен"
+    return 0
+  fi
+
+  # 1. Браузер, который понимает именно MCP (chrome-for-testing, не chromium).
+  if compgen -G "$HOME/.cache/ms-playwright/chromium-*" >/dev/null 2>&1; then
+    skip "браузер Playwright"
+  else
+    echo "  качаю браузер (~120 МБ)..."
+    if npx -y @playwright/mcp@latest install-browser chrome-for-testing >/dev/null 2>&1; then
+      ok "браузер установлен"
+    else
+      soft_fail "браузер не скачался"
+    fi
+  fi
+
+  # 2. Системные библиотеки без sudo.
+  if [[ -e "$CHROMIUM_LIBS/libnss3.so" && -e "$CHROMIUM_LIBS/libnspr4.so" && -e "$CHROMIUM_LIBS/libasound.so.2" ]]; then
+    skip "системные библиотеки для браузера"
+  elif ! command -v dpkg-deb >/dev/null 2>&1; then
+    warn "dpkg-deb нет — библиотеки не распаковать. Нужен: sudo apt install -y libnss3 libnspr4 libasound2t64"
+  else
+    local dl
+    dl="$(mktemp -d)"
+    # libasound2 в Ubuntu 24.04+ называется libasound2t64.
+    local pkgs=(libnss3 libnspr4)
+    ( cd "$dl" && apt-get download "${pkgs[@]}" libasound2t64 >/dev/null 2>&1 ) \
+      || ( cd "$dl" && apt-get download "${pkgs[@]}" libasound2 >/dev/null 2>&1 )
+    if compgen -G "$dl/*.deb" >/dev/null 2>&1; then
+      mkdir -p "$CHROMIUM_LIBS"
+      for d in "$dl"/*.deb; do
+        dpkg-deb -x "$d" "$dl/ext" 2>/dev/null
+      done
+      cp -a "$dl/ext/usr/lib/x86_64-linux-gnu/"*.so* "$CHROMIUM_LIBS/" 2>/dev/null
+      ok "библиотеки распакованы в ~/.local/lib/chromium-deps"
+    else
+      soft_fail "не скачались deb-пакеты (нет доступа к apt-репозиторию?)"
+    fi
+    rm -rf "$dl"
+  fi
+
+  # 3. Обёртка: MCP по умолчанию ищет /opt/google/chrome, а не наш браузер,
+  #    и запускается с урезанным PATH. Оба вопроса решает этот скрипт.
+  cat > "$LOCAL_BIN/playwright-mcp" <<'WRAPPER'
+#!/usr/bin/env bash
+# Playwright MCP с браузером, поставленным без sudo.
+#
+# 1. Системных libnss3/libnspr4/libasound2 нет (ставятся только через sudo),
+#    поэтому они распакованы в ~/.local/lib/chromium-deps.
+# 2. MCP ищет канал 'chrome' (/opt/google/chrome), а не браузер из
+#    ~/.cache/ms-playwright — флаг --browser chromium это правит.
+# 3. MCP запускается с урезанным PATH — npx добавляем явно.
+set -uo pipefail
+export PATH="$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin${PATH:+:$PATH}"
+export LD_LIBRARY_PATH="$HOME/.local/lib/chromium-deps${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+exec npx -y @playwright/mcp@latest --browser chromium --headless "$@"
+WRAPPER
+  chmod +x "$LOCAL_BIN/playwright-mcp"
+  ok "обёртка ~/.local/bin/playwright-mcp"
+
+  if [[ -z "${SKIP_CLAUDE:-}" ]]; then
+    # Старый плагин playwright содержит только .mcp.json (скиллов в нём нет)
+    # и запускает MCP без наших флагов — то есть не работает. Убираем.
+    if claude plugin list 2>/dev/null | grep -q "playwright@claude-plugins-official"; then
+      claude plugin uninstall playwright@claude-plugins-official -y >/dev/null 2>&1 \
+        && ok "старый плагин playwright убран" \
+        || warn "не убрался плагин playwright — сделай вручную"
+    fi
+
+    if claude mcp list 2>/dev/null | grep -q "^playwright:"; then
+      skip "MCP playwright"
+    elif claude mcp add playwright -s user -- "$LOCAL_BIN/playwright-mcp" >/dev/null 2>&1; then
+      ok "MCP playwright"
+    else
+      soft_fail "MCP playwright не подключился"
+    fi
+  fi
+}
+
 # --- Плагины -----------------------------------------------------------------
 if [[ -z "${SKIP_CLAUDE:-}" ]]; then
   step "Маркетплейсы плагинов"
@@ -221,7 +327,6 @@ if [[ -z "${SKIP_CLAUDE:-}" ]]; then
   install_plugin "superpowers@claude-plugins-official"
   install_plugin "claude-md-management@claude-plugins-official"
   install_plugin "context7@claude-plugins-official"
-  install_plugin "playwright@claude-plugins-official"
   install_plugin "example-skills@anthropic-agent-skills"
   install_plugin "document-skills@anthropic-agent-skills"
 
@@ -237,6 +342,8 @@ if [[ -z "${SKIP_CLAUDE:-}" ]]; then
     fi
   fi
 fi
+
+install_playwright
 
 # --- CLAUDE.md ---------------------------------------------------------------
 step "CLAUDE.md"

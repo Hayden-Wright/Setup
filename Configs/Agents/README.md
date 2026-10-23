@@ -6,6 +6,7 @@
 - [Установка одной командой](#установка-одной-командой)
 - [Что ставится и зачем](#что-ставится-и-зачем)
 - [По одному](#по-одному)
+- [Playwright](#playwright)
 - [Реверс-инжиниринг](#реверс-инжиниринг-опционально)
 - [Удаление](#удаление)
 
@@ -24,9 +25,13 @@ bash <(curl -fsSL https://raw.githubusercontent.com/Hayden-Wright/Setup/main/Con
 сам Claude Code. Если `claude` не найден, скрипт поставит окружение и
 пропустит плагины — их можно добить позже.
 
-**Что он не делает:** не ставит Ghidra (570 МБ, отдельная история — см.
-[ниже](#ghidra)) и не ставит `apt`-пакеты, потому что для них нужен пароль
-sudo.
+**Что он не делает:** не ставит Ghidra (~880 МБ распакованной, отдельная
+история — см. [ниже](#ghidra)) и не ставит `apt`-пакеты, потому что для них
+нужен пароль sudo.
+
+Браузер Playwright он ставит сам и без sudo — библиотеки для него
+распаковываются из deb-пакетов в `~/.local` (подробности в разделе
+[Playwright](#playwright)).
 
 ## Что ставится и зачем
 
@@ -34,13 +39,13 @@ sudo.
 |---|---|---|
 | Node 24 LTS + npm/npx | `~/.local` | без него не работают `npx`-MCP-серверы (playwright) и установка скиллов |
 | uv / uvx | `~/.local/bin` | запуск Python-MCP-серверов, установка пакетов |
-| Python-библиотеки | `~/.local/lib/python3.14/site-packages` | чтобы работали скиллы pdf/docx/xlsx/pptx |
+| Python-библиотеки | user-site python3 (`~/.local/lib/python3.14/…`) | чтобы работали скиллы pdf/docx/xlsx/pptx |
 | superpowers | плагин | методология: brainstorming, systematic-debugging, TDD, код-ревью |
 | example-skills | плагин | 12 скиллов, включая `skill-creator` и `frontend-design` |
 | document-skills | плагин | pdf, docx, xlsx, pptx |
 | claude-md-management | плагин | аудит и правка CLAUDE.md |
 | context7 | плагин + MCP | актуальная документация библиотек вместо памяти модели |
-| playwright | плагин + MCP | браузерная автоматизация, тесты веб-приложений |
+| playwright | MCP + браузер (~670 МБ в `~/.cache`) | браузерная автоматизация, тесты веб-приложений, скриншоты |
 | deploychan | MCP | каталог знаний и готовых скиллов, без ключей |
 | CLAUDE.md | `~/.claude/CLAUDE.md` | твои правила: язык, окружение, границы |
 
@@ -85,14 +90,16 @@ uv --version
 Без них скиллы `pdf`, `docx`, `xlsx`, `pptx` падают на первом же импорте.
 
 ```bash
-uv pip install --python /usr/bin/python3 \
-  --target ~/.local/lib/python3.14/site-packages \
+# путь зависит от версии python — спрашиваем у него самого
+SITE=$(python3 -c 'import site; print(site.getusersitepackages())')
+
+uv pip install --python /usr/bin/python3 --target "$SITE" \
   pypdf pdfplumber openpyxl python-docx python-pptx \
   pandas pillow reportlab matplotlib
 
 # консольные скрипты кладутся в site-packages/bin — прокидываем в PATH
 for f in markitdown pdf2txt.py dumppdf.py; do
-  ln -sf ~/.local/lib/python3.14/site-packages/bin/$f ~/.local/bin/$f
+  ln -sf "$SITE/bin/$f" ~/.local/bin/$f
 done
 ```
 
@@ -110,12 +117,17 @@ claude plugin marketplace add anthropics/skills
 claude plugin install superpowers@claude-plugins-official -y
 claude plugin install claude-md-management@claude-plugins-official -y
 claude plugin install context7@claude-plugins-official -y
-claude plugin install playwright@claude-plugins-official -y
 claude plugin install example-skills@anthropic-agent-skills -y
 claude plugin install document-skills@anthropic-agent-skills -y
 ```
 
 Флаг `-y` обязателен: без TTY установка иначе отказывается.
+
+**Плагин `playwright` отдельно не ставится — он нерабочий.** В нём только
+`.mcp.json`, без скиллов, и он запускает MCP без нужных флагов: сервер ищет
+Chrome в `/opt/google/chrome`, которого в WSL нет, и падает на
+`Chromium distribution 'chrome' is not found`. Рабочая установка — ниже, в
+разделе [Playwright](#playwright).
 
 **Не ставь `skill-creator` и `frontend-design` отдельными плагинами.** Они
 побайтово лежат внутри `example-skills`; отдельная установка дублирует их в
@@ -158,6 +170,70 @@ gh pr list
 
 Ставь MCP только если реально нужен ревью PR с комментариями по строкам.
 
+### Playwright
+
+Браузерная автоматизация: открыть страницу, кликнуть, снять скриншот,
+посмотреть консоль. Ставится в три шага, и каждый нужен — пропустишь любой,
+MCP будет числиться `Connected`, но упадёт на первом же вызове.
+
+**Шаг 1. Браузер.** Не `chromium`, а именно `chrome-for-testing` — MCP ищет
+его в своём каталоге:
+
+```bash
+npx -y @playwright/mcp@latest install-browser chrome-for-testing
+```
+
+**Шаг 2. Системные библиотеки.** Браузер не запустится без `libnss3`,
+`libnspr4`, `libasound2`, а в голом WSL их нет. Ставить их надо через sudo,
+но можно обойтись: скачать deb-пакеты и распаковать в `~/.local`.
+
+```bash
+mkdir -p ~/.local/lib/chromium-deps /tmp/pwdeps
+cd /tmp/pwdeps
+apt-get download libnss3 libnspr4 libasound2t64
+for d in *.deb; do dpkg-deb -x "$d" ext/; done
+cp -a ext/usr/lib/x86_64-linux-gnu/*.so* ~/.local/lib/chromium-deps/
+```
+
+`apt-get download` работает без root — он только скачивает файлы.
+В Ubuntu 22.04 и старше пакет называется `libasound2`, а не `libasound2t64`.
+
+Проверка, что все зависимости разрешились:
+
+```bash
+B=$(ls -d ~/.cache/ms-playwright/chromium-*/chrome-linux64/chrome | head -1)
+LD_LIBRARY_PATH=~/.local/lib/chromium-deps ldd "$B" | grep "not found" || echo "все библиотеки на месте"
+```
+
+**Шаг 3. Обёртка.** MCP надо запускать с флагом `--browser chromium` (иначе
+он ищет `/opt/google/chrome`) и с `LD_LIBRARY_PATH`. Проще всего — скриптом:
+
+```bash
+cat > ~/.local/bin/playwright-mcp <<'EOF'
+#!/usr/bin/env bash
+set -uo pipefail
+export PATH="$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin${PATH:+:$PATH}"
+export LD_LIBRARY_PATH="$HOME/.local/lib/chromium-deps${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+exec npx -y @playwright/mcp@latest --browser chromium --headless "$@"
+EOF
+chmod +x ~/.local/bin/playwright-mcp
+
+claude mcp add playwright -s user -- ~/.local/bin/playwright-mcp
+```
+
+Строка `export PATH` не лишняя: MCP запускается с урезанным окружением, и без
+неё обёртка падает с `npx: not found`.
+
+**Проверка:**
+
+```bash
+claude mcp list | grep playwright     # должно быть ✔ Connected
+```
+
+Одного `Connected` мало — он означает лишь, что процесс стартовал. Настоящая
+проверка — попросить агента открыть страницу; если браузера нет, ответ будет
+`Chromium distribution 'chrome' is not found`.
+
 ### CLAUDE.md
 
 Файл `~/.claude/CLAUDE.md` читается в каждой сессии. Установщик кладёт туда
@@ -174,7 +250,8 @@ curl -fsSL https://raw.githubusercontent.com/Hayden-Wright/Setup/main/Configs/Ag
 
 ## Реверс-инжиниринг (опционально)
 
-Не ставится установщиком — нужен sudo и, для Ghidra, 570 МБ.
+Не ставится установщиком: инструменты из apt требуют sudo, Ghidra занимает
+~880 МБ на диске. Всё ниже — по шагам, каждый проверен.
 
 ### Инструменты из apt
 
@@ -229,10 +306,14 @@ C:\Users\<user>\ghidra_12.2_PUBLIC\support\analyzeHeadless.bat C:\ghidra_proj pr
 ### Python-пакеты для реверса
 
 ```bash
-uv pip install --python /usr/bin/python3 \
-  --target ~/.local/lib/python3.14/site-packages \
-  capstone lief z3-solver angr
+SITE=$(python3 -c 'import site; print(site.getusersitepackages())')
+uv pip install --python /usr/bin/python3 --target "$SITE" \
+  capstone lief z3-solver angr unicorn
 ```
+
+`unicorn` нужен явно: angr без него загружается, но печатает
+`unicorn support disabled` и не умеет символьное исполнение — а ради него angr
+и ставят. Пакет не приходит как зависимость.
 
 `capstone` — дизассемблер как библиотека, `lief` — разбор и правка ELF/PE,
 `z3-solver` — решатель ограничений (для брутфорса проверок), `angr` —
@@ -241,23 +322,30 @@ uv pip install --python /usr/bin/python3 \
 ## Удаление
 
 ```bash
-# плагины
-for p in superpowers claude-md-management context7 playwright; do
-  claude plugin uninstall "$p@claude-plugins-official"
+# плагины (-y обязателен без TTY: без него uninstall ждёт подтверждения)
+for p in superpowers claude-md-management context7; do
+  claude plugin uninstall "$p@claude-plugins-official" -y
 done
-claude plugin uninstall example-skills@anthropic-agent-skills
-claude plugin uninstall document-skills@anthropic-agent-skills
+claude plugin uninstall example-skills@anthropic-agent-skills -y
+claude plugin uninstall document-skills@anthropic-agent-skills -y
 
 # MCP
 claude mcp remove deploychan
+claude mcp remove playwright
 ```
 
 Node и uv лежат в `~/.local` — если больше не нужны, `rm -rf ~/.local/node*`
 и `rm -rf ~/.local/bin/uv*`. Python-библиотеки — `rm -rf ~/.local/lib/python3.14`.
 
+Браузер и его библиотеки — отдельно, они самые тяжёлые (~670 МБ):
+
+```bash
+rm -rf ~/.cache/ms-playwright ~/.local/lib/chromium-deps ~/.local/bin/playwright-mcp
+```
+
 ## Ссылки
 
-- [Claude Code](https://github.com/Mr-Destroyer/zim-claude) — надстройка над zim-claude
+- [zim-claude](https://github.com/Mr-Destroyer/zim-claude) — Claude Code через локальный LiteLLM-прокси
 - [anthropics/skills](https://github.com/anthropics/skills) — официальные скиллы
 - [deploychan](https://mcp.deploychan.webcam) — каталог знаний
 
