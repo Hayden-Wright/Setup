@@ -112,6 +112,7 @@ python3 -c "import pandas, docx, pptx, openpyxl, pypdf, reportlab, PIL, matplotl
 ### Плагины
 
 ```bash
+claude plugin marketplace add anthropics/claude-plugins-official
 claude plugin marketplace add anthropics/skills
 
 claude plugin install superpowers@claude-plugins-official -y
@@ -122,6 +123,11 @@ claude plugin install document-skills@anthropic-agent-skills -y
 ```
 
 Флаг `-y` обязателен: без TTY установка иначе отказывается.
+
+**Оба маркетплейса обязательны.** На чистой машине Claude Code знает только
+встроенный `anthropic-plugin-directory`, а `claude-plugins-official` в нём нет.
+Без первой команды `superpowers`, `context7` и `claude-md-management` не
+поставятся — установка упадёт с «marketplace not found».
 
 **Плагин `playwright` отдельно не ставится — он нерабочий.** В нём только
 `.mcp.json`, без скиллов, и он запускает MCP без нужных флагов: сервер ищет

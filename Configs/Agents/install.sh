@@ -298,15 +298,23 @@ WRAPPER
 if [[ -z "${SKIP_CLAUDE:-}" ]]; then
   step "Маркетплейсы плагинов"
 
-  if claude plugin marketplace list 2>/dev/null | grep -q "anthropic-agent-skills"; then
-    skip "anthropic-agent-skills"
-  else
-    if claude plugin marketplace add anthropics/skills >/dev/null 2>&1; then
-      ok "anthropics/skills подключён"
-    else
-      soft_fail "не подключился маркетплейс anthropics/skills"
+  # Нужны оба. claude-plugins-official на чистой машине отсутствует —
+  # без него superpowers/context7/claude-md-management не ставятся вообще.
+  add_marketplace() {
+    local name="$1" repo="$2"
+    if claude plugin marketplace list 2>/dev/null | grep -q "❯ ${name}$"; then
+      skip "${name}"
+      return 0
     fi
-  fi
+    if claude plugin marketplace add "$repo" >/dev/null 2>&1; then
+      ok "${repo}"
+    else
+      soft_fail "не подключился маркетплейс ${repo}"
+    fi
+  }
+
+  add_marketplace "claude-plugins-official" "anthropics/claude-plugins-official"
+  add_marketplace "anthropic-agent-skills" "anthropics/skills"
 
   step "Плагины"
 
