@@ -155,10 +155,15 @@ claude mcp add --transport http deploychan https://mcp.deploychan.webcam/mcp -s 
 ```
 
 **context7** — ставится плагином, но требует входа: при первом вызове
-инструмента откроется браузер. В WSL есть подвох — Windows не форвардит
-`localhost`, поэтому OAuth-callback может не дойти. Обходной путь описан в
-комментариях к issue; проще всего войти из терминала, где открывается
-браузер, либо использовать API-ключ с [context7.com/dashboard](https://context7.com/dashboard):
+инструмента откроется браузер.
+
+В WSL есть подвох: Windows не форвардит `localhost`, а OAuth редиректит именно
+на `localhost:<порт>`. Браузер на стороне Windows до него не достучится, и
+вход зависает на редиректе. OAuth-сессия живёт 5 минут — успеть вручную через
+проброс порта почти нереально.
+
+Практичный путь — API-ключ с [context7.com/dashboard](https://context7.com/dashboard),
+он входа через браузер не требует:
 
 ```bash
 claude mcp add --transport http context7 https://mcp.context7.com/mcp \
