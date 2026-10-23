@@ -232,7 +232,12 @@ put "$FILES/cptr-patches/config-multiline-toml.patch" "$RUNTIME/patches/config-m
 
 # ---------------------------------------------------------------- Claude Code
 
-log "4/4  настройки Claude Code (права, хук памяти, MCP)"
+log "4/4  настройки Claude Code (права, хук памяти, статус-строка, MCP)"
+
+# Статус-строка: процент занятого контекста. Кладём ДО слияния settings.json —
+# statusLine ссылается на этот файл, и он должен существовать к первому
+# запуску. python3 есть по шагу 1 install-stack.sh, импорты — только stdlib.
+put "$FILES/statusline.py"                    "$HOME/.claude/statusline.py" 755
 
 # settings.json: НЕ затираем целиком — у тебя там свои ключи (тема, флаги).
 # Добавляем/обновляем только то, чем управляет этот скрипт: permissions и
@@ -288,6 +293,15 @@ if hooks.get("SessionStart") != want["hooks"]["SessionStart"]:
         target.with_suffix(".json.bak-hook").write_text(target.read_text())
     hooks["SessionStart"] = want["hooks"]["SessionStart"]
     changed.append("SessionStart hook")
+
+# statusLine ставим, только если своего ещё нет. Свою строку человек мог
+# настроить сам (как и permissions) — её не перетираем, а сообщаем об этом.
+if "statusLine" in want:
+    if "statusLine" not in data:
+        data["statusLine"] = want["statusLine"]
+        changed.append("statusLine")
+    elif data["statusLine"] != want["statusLine"]:
+        print("  · statusLine уже свой — не трогаю (нужен наш? удали ключ и запусти снова)")
 
 if changed:
     target.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n")

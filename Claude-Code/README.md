@@ -94,3 +94,18 @@ tail -20 ~/.local/share/zim-claude/update.log
 ```powershell
 powershell -ExecutionPolicy Bypass -File \\wsl.localhost\Ubuntu\home\<user>\zim-setup\files\windows\create-shortcuts.ps1
 ```
+
+**Нет статус-строки с процентом контекста.** Она появляется после перезапуска
+Claude Code (читается при старте сессии). Проверить, что скрипт на месте:
+
+```bash
+ls -l ~/.claude/statusline.py
+python3 -c 'import json; print(json.load(open("'"$HOME"'/.claude/settings.json"))["statusLine"])'
+```
+
+Если `statusLine` в конфиге свой (не `python3 ~/.claude/statusline.py`),
+установщик его не перетирает — удали ключ и запусти `./deploy.sh` снова.
+
+Вид строки: `~/проект │ ctx 34% (89k/262k)`. Цвет процента: зелёный до 50 %,
+жёлтый до 75 %, дальше красный. Пустая сессия — `ctx —`.
+
