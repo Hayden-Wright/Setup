@@ -33,7 +33,6 @@
       "Bash(pwd)",
       "Bash(uname:*)",
       "Read(//home/**)",
-      "Bash(/home/*/.config/zim-claude/openwebui/run-openwebui.sh:*)",
       "Read",
       "Glob",
       "Grep",

@@ -49,8 +49,8 @@ function Write-Ok($m)  { Write-Host "  [+] $m" -ForegroundColor Green }
 $startAllBat = @'
 @echo off
 chcp 65001 >nul
-rem Bring the whole stack up: Docker, SearxNG, Open WebUI, proxies :4000 and
-rem :4002, cptr, and finally zim-claude. Opens in its own window.
+rem Bring the whole stack up: Docker, SearxNG, proxies :4000 (terminal) and
+rem :4002 (Claude Desktop gateway), and finally zim-claude. Own window.
 setlocal
 set "DISTRO=__DISTRO__"
 set "CMD=./start-all.sh"

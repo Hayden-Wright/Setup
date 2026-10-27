@@ -15,9 +15,12 @@ cd zim-setup
 Ключ Token Juice спросит установщик (ввод скрыт). Для неинтерактивной
 установки — `ZIM_CLAUDE_TOKEN=tj_… ./install-stack.sh`.
 
-Прервётся дважды, и это нормально: после установки Docker (закрой терминал,
-открой заново и запусти снова) и перед настройкой cptr (открой напечатанную
-ссылку, зарегистрируйся, запусти снова).
+Прервётся один раз, и это нормально: после установки Docker (закрой терминал,
+открой заново и запусти снова).
+
+Браузерного чата (Open WebUI + cptr) в наборе больше нет: его заменил Claude
+Desktop, который работает напрямую с шлюзом на `:4002`. Настройка приложения —
+в README `zim-claude`, раздел «Claude Desktop — the `zim` gateway».
 
 ## Если что-то не так
 
@@ -36,11 +39,21 @@ sudo apt install -y docker.io
 ~/.local/bin/start-litellm.sh restart
 ```
 
-**Веб-поиск отвечает только короткими сниппетами.** Контейнер Open WebUI
-поднят не через `run-openwebui.sh`:
+**Веб-поиск не работает (Claude Code или Claude Desktop отвечает ошибкой на
+`web_search`).** Нужен SearxNG — движок, через который прокси ищет сам:
 
 ```bash
-cd ~/.config/zim-claude/openwebui && ./run-openwebui.sh
+docker ps --format '{{.Names}}' | grep searxng || docker start searxng
+curl -sf 'http://127.0.0.1:8888/search?q=test&format=json' >/dev/null && echo ok
+```
+
+**Остался старый Open WebUI / cptr.** Набор их больше не ставит и не
+поднимает. Удалить окончательно (история чатов в томе `open-webui` пропадёт):
+
+```bash
+docker rm -f open-webui
+pkill -f cptr
+rm -rf ~/.local/share/cptr-venv ~/start-cptr.sh   # ~/start-all.sh перезапишет Setup
 ```
 
 **SearxNG не запускается.** Образ весит ~380 МБ и качается один раз:
@@ -48,34 +61,6 @@ cd ~/.config/zim-claude/openwebui && ./run-openwebui.sh
 ```bash
 docker pull searxng/searxng:latest
 docker logs searxng
-```
-
-**В Open WebUI «No models available».** Проверь, что cptr отдаёт модель:
-
-```bash
-KEY=$(grep '^OPENAI_API_KEY=' ~/.config/zim-claude/openwebui/openwebui.env | cut -d= -f2)
-curl -s -H "Authorization: Bearer $KEY" http://127.0.0.1:8100/v1/models
-```
-
-Пусто — у cptr нет рабочей папки: запусти `./install-stack.sh` ещё раз либо
-открой `http://127.0.0.1:8100` и выбери папку. Модель есть, а в браузере
-нет — `docker restart open-webui`.
-
-**В чате «No API model connections configured».** У cptr нет пакета
-`claude-agent-sdk`:
-
-```bash
-~/.local/share/cptr-venv/bin/pip install 'claude-agent-sdk>=0.1.62'
-~/start-cptr.sh restart
-```
-
-**Обновил cptr — пропали картинки из чата.** Обновление затирает патчи:
-
-```bash
-PKG=$(ls -d ~/.local/share/cptr-venv/lib/python*/site-packages/cptr)
-patch -p1 -d "$PKG" < ~/.config/zim-claude/patches/gateway-images.patch
-patch -p1 -d "$PKG" < ~/.config/zim-claude/patches/config-multiline-toml.patch
-~/start-cptr.sh restart
 ```
 
 **Автообновление не срабатывает.** Смотри логи:

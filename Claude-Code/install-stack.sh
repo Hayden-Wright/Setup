@@ -4,13 +4,12 @@
 #   cd ~/zim-claude/deploy && ./install-stack.sh
 #
 # Скрипт можно запускать сколько угодно раз: он смотрит, что уже сделано, и
-# доделывает только оставшееся. Если чего-то не хватает (например, ты ещё не
-# зарегистрировался в cptr), он скажет, что сделать, и попросит запустить
-# себя снова.
+# доделывает только оставшееся.
 #
 # Ставит: Docker, доработки zim-claude (веб-поиск, zim-memory, настройки
-# Claude Code), SearxNG, cptr и Open WebUI, плюс ярлыки на рабочем столе
-# Windows. Сам zim-claude и прокси ставит install.sh из корня репозитория —
+# Claude Code), SearxNG, плюс ярлыки на рабочем столе Windows. Браузерного
+# чата (Open WebUI + cptr) здесь больше нет: его заменяет Claude Desktop,
+# который работает напрямую с шлюзом zim-claude на :4002. Сам zim-claude и прокси ставит install.sh из корня репозитория —
 # этот скрипт вызывает его, если их нет.
 
 set -uo pipefail
@@ -61,7 +60,7 @@ printf '%sМожно запускать повторно — уже сделан
 
 # ── 1. базовые пакеты ────────────────────────────────────────────────────────
 
-step "1/10  Базовые пакеты"
+step "1/8  Базовые пакеты"
 
 MISSING=()
 for pkg in git curl python3; do
@@ -86,7 +85,7 @@ fi
 
 # ── 2. Docker ────────────────────────────────────────────────────────────────
 
-step "2/10  Docker"
+step "2/8  Docker"
 
 if need docker; then
   if docker ps >/dev/null 2>&1; then
@@ -154,7 +153,7 @@ fi
 
 # ── 3. Claude Code и zim-claude ──────────────────────────────────────────────
 
-step "3/10  Claude Code и zim-claude"
+step "3/8  Claude Code и zim-claude"
 
 if need claude; then
   ok "Claude Code уже установлен: $(claude --version 2>/dev/null | head -1)"
@@ -195,7 +194,7 @@ fi
 # Code хранит ответ в ~/.claude.json, в projects[<каталог>].hasTrustDialogAccepted,
 # и спрашивает заново, пока ключа нет. Доверие наследуется вложенными
 # каталогами, поэтому одной записи на $HOME хватает на всё внутри — и на
-# терминал, и на агента cptr, который стартует в воркспейсе.
+# терминал и на любые агентские сессии внутри $HOME.
 #
 # --dangerously-skip-permissions этот диалог НЕ снимает (проверено): флаг
 # отвечает за права на инструменты, а не за доверие к папке.
@@ -235,7 +234,7 @@ PY
 
 # ── 4. доработки ─────────────────────────────────────────────────────────────
 
-step "4/10  Доработки (веб-поиск, zim-memory, настройки Claude Code)"
+step "4/8  Доработки (веб-поиск, zim-memory, настройки Claude Code)"
 
 ( cd "$SRC" && ./deploy.sh ) 2>&1 | sed 's/^/      /'
 if (( PIPESTATUS[0] != 0 )); then
@@ -262,7 +261,7 @@ fi
 
 # ── 5. SearxNG ───────────────────────────────────────────────────────────────
 
-step "5/10  SearxNG (локальный веб-поиск)"
+step "5/8  SearxNG (локальный веб-поиск)"
 
 docker network inspect zim-net >/dev/null 2>&1 || docker network create zim-net >/dev/null 2>&1
 
@@ -327,333 +326,9 @@ if (( ! SEARXNG_OK )); then
   warn "веб-поиск работать не будет, пока SearxNG не поднимется"
   todo "запустить SearxNG (см. README, раздел «Если что-то не так»)"
 fi
-
-# ── 6. cptr ──────────────────────────────────────────────────────────────────
-
-step "6/10  cptr (агент с доступом к диску)"
-
-CPTR_VENV="$HOME/.local/share/cptr-venv"
-CPTR_PY="$CPTR_VENV/bin/python"
-
-if [[ -x "$CPTR_VENV/bin/cptr" ]]; then
-  have "уже установлен"
-else
-  # [agents] обязателен: поддержка Claude Code у cptr — опциональная
-  # зависимость (claude-agent-sdk). Без неё профиль агента получает статус
-  # missing_dependency, gateway.model из setup-cptr.sh не разрешается, и чат
-  # отвечает 503 No API model connections configured.
-  have "ставлю cptr 0.9.21 (версия зафиксирована — под неё написаны патчи)"
-  python3 -m venv "$CPTR_VENV" || { fail "не удалось создать venv"; exit 1; }
-  "$CPTR_VENV/bin/pip" install --quiet --disable-pip-version-check -U pip
-  "$CPTR_VENV/bin/pip" install --quiet --disable-pip-version-check 'cptr[agents]==0.9.21' \
-    || { fail "не удалось поставить cptr"; exit 1; }
-  ok "установлен"
-fi
-
-# На уже стоящем cptr доработка не применилась бы: ветка выше пропускается.
-# Проверяем SDK отдельно, чтобы починка дошла и до тех, кто ставил раньше.
-if [[ -x "$CPTR_VENV/bin/cptr" ]] && ! "$CPTR_VENV/bin/python" -c 'import claude_agent_sdk' >/dev/null 2>&1; then
-  have "дописываю claude-agent-sdk (нужен cptr для работы агента)"
-  "$CPTR_VENV/bin/pip" install --quiet --disable-pip-version-check 'claude-agent-sdk>=0.1.62' \
-    || warn "не удалось поставить claude-agent-sdk — чат будет отвечать ошибкой"
-fi
-
-# Патчи идемпотентны не полностью: повторное применение к уже пропатченному
-# файлу выдаст «Reversed (or previously applied) patch detected». Поэтому
-# сначала проверяем --dry-run: если он молчит, патч уже стоит.
-CPTR_PKG="$(ls -d "$CPTR_VENV"/lib/python*/site-packages/cptr 2>/dev/null | head -1)"
-if [[ -n "$CPTR_PKG" ]]; then
-  for p in gateway-images config-multiline-toml; do
-    pf="$RUNTIME/patches/$p.patch"
-    [[ -f "$pf" ]] || continue
-    if patch -p1 --dry-run -d "$CPTR_PKG" <"$pf" >/dev/null 2>&1; then
-      patch -p1 -d "$CPTR_PKG" <"$pf" >/dev/null 2>&1 && ok "патч $p применён"
-    else
-      have "патч $p уже стоит"
-    fi
-  done
-fi
-
-# Стартуем cptr (если ещё не запущен) — дальше нужен его пользователь.
-CPTR_START_OUT="$("$HOME/start-cptr.sh" start 2>&1)"
-CPTR_START_RC=$?
-
-CPTR_UP=0
-for _ in $(seq 1 20); do
-  if curl -sf http://127.0.0.1:8100/api/config -o /dev/null 2>/dev/null; then
-    CPTR_UP=1
-    break
-  fi
-  sleep 1
-done
-
-if (( CPTR_UP )); then
-  ok "cptr работает на http://127.0.0.1:8100"
-else
-  warn "cptr не отвечает"
-  if (( CPTR_START_RC != 0 )); then
-    printf '%s\n' "$CPTR_START_OUT" | sed 's/^/      /'
-  fi
-  warn "смотри лог:  tail -30 /tmp/cptr.log"
-fi
-
-# ── 6b. пользователь cptr ────────────────────────────────────────────────────
-
-CPTR_USER=""
-if [[ -f "$HOME/.cptr/app.db" ]]; then
-  CPTR_USER="$("$CPTR_PY" -I -c "
-import sqlite3, pathlib
-try:
-    con = sqlite3.connect(f\"file:{pathlib.Path.home()/'.cptr/app.db'}?mode=ro\", uri=True)
-    row = con.execute('select id from users limit 1').fetchone()
-    print(row[0] if row else '')
-except Exception:
-    print('')
-" 2>/dev/null)"
-fi
-
-if [[ -z "$CPTR_USER" ]]; then
-  step "6b/10  Нужен твой шаг: регистрация в cptr"
-
-  URL="$("$HOME/start-cptr.sh" url 2>/dev/null)"
-  if [[ -z "$URL" ]]; then
-    fail "cptr не запущен, поэтому ссылки для регистрации нет"
-    cat <<'EOF'
-
-      Сначала подними cptr:
-
-          ~/start-cptr.sh start
-
-      Если он не стартует — посмотри причину:
-
-          tail -30 /tmp/cptr.log
-
-      Затем запусти этот скрипт снова.
-
-EOF
-    exit 1
-  fi
-
-  cat <<EOF
-
-  Открой в браузере эту ссылку (она с одноразовым токеном доступа):
-
-      $URL
-
-  Зарегистрируйся — придумай логин и пароль, они локальные, никуда не уходят.
-  После этого запусти этот скрипт ещё раз, и он доделает остальное.
-
-EOF
-  exit 0
-fi
-
-have "пользователь cptr заведён"
-
-"$FILES/setup-cptr.sh" 2>&1 | sed 's/^/      /'
-if (( PIPESTATUS[0] != 0 )); then
-  fail "не удалось записать настройки cptr — смотри вывод выше"
-  exit 1
-fi
-
-# ── 7. Open WebUI ────────────────────────────────────────────────────────────
-
-step "7/10  Open WebUI (браузерный чат)"
-
-ENV_FILE="$RUNTIME/openwebui/openwebui.env"
-
-# Имя, под которым модель видна в пикере Open WebUI. По умолчанию — имя
-# апстрима: за псевдонимом стоит DeepSeek, но Claude Code и Claude Desktop
-# уже показывают его как Opus, и разнобой в браузере только путает.
-MODEL_NAME="${ZIM_CLAUDE_MODEL_NAME:-Opus 5.5}"
-
-# WEBUI_SECRET_KEY подписывает сессионные куки Open WebUI. В наборе лежит
-# ключ Хейдена, а двум разным установкам он не нужен: сгенерируем свой. Делаем
-# это ровно один раз — при повторном запуске значение уже не тронем, иначе
-# после каждого запуска всех выкидывало бы из аккаунта.
-if grep -q '^WEBUI_SECRET_KEY=$' "$ENV_FILE" 2>/dev/null; then
-  have "генерирую свой ключ сессий для Open WebUI"
-  SECRET="$(python3 -c 'import secrets; print(secrets.token_hex(32))')"
-  python3 -I - "$ENV_FILE" "$SECRET" <<'PY'
-import pathlib, re, sys
-path, secret = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
-path.write_text(re.sub(r'^WEBUI_SECRET_KEY=.*$', f'WEBUI_SECRET_KEY={secret}',
-                       path.read_text(), flags=re.M))
-PY
-  ok "ключ сессий сгенерирован"
-fi
-
-# API-ключ cptr создаём сами: он привязан к id пользователя, а JWT подписывается
-# секретом из config.toml. Так не нужно проходить через админку руками.
-#
-# KEY объявляем пустым заранее: при повторном запуске ключ уже прописан, ветка
-# else не выполняется, а ниже он всё равно подставляется в базу Open WebUI.
-# Без этого `set -u` роняет скрипт на последнем шаге.
-KEY=""
-if grep -q '^OPENAI_API_KEY=sk-cptr-' "$ENV_FILE" 2>/dev/null; then
-  have "ключ cptr уже прописан"
-  KEY="$(sed -n 's/^OPENAI_API_KEY=//p' "$ENV_FILE" | head -1)"
-else
-  KEY="$("$CPTR_PY" -I - "$HOME" <<'PY' 2>/dev/null
-import json, pathlib, sqlite3, sys, time, uuid, urllib.request, tomllib
-
-home = pathlib.Path(sys.argv[1])
-try:
-    secret = tomllib.loads((home / ".cptr/config.toml").read_text())["server"]["secret"]
-    con = sqlite3.connect(f"file:{home/'.cptr/app.db'}?mode=ro", uri=True)
-    uid, name, role = con.execute("select id, display_name, role from users limit 1").fetchone()
-    con.close()
-    import jwt
-    tok = jwt.encode({"sub": uid, "username": name, "role": role,
-                      "exp": time.time() + 300, "jti": str(uuid.uuid4())},
-                     secret, algorithm="HS256")
-    req = urllib.request.Request(
-        "http://127.0.0.1:8100/v1/keys",
-        data=json.dumps({"name": "open-webui"}).encode(),
-        headers={"Content-Type": "application/json",
-                 "Cookie": f"cptr_session={tok}"},
-        method="POST")
-    print(json.loads(urllib.request.urlopen(req, timeout=10).read())["key"])
-except Exception:
-    print("")
-PY
-)"
-
-  if [[ -n "$KEY" ]]; then
-    python3 -I - "$ENV_FILE" "$KEY" <<'PY'
-import pathlib, re, sys
-path, key = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
-text = path.read_text()
-if re.search(r'^OPENAI_API_KEY=.*$', text, flags=re.M):
-    text = re.sub(r'^OPENAI_API_KEY=.*$', f'OPENAI_API_KEY={key}', text, flags=re.M)
-else:
-    text += f'\nOPENAI_API_KEY={key}\n'
-path.write_text(text)
-PY
-    ok "ключ cptr создан и прописан"
-  else
-    warn "не удалось создать ключ автоматически"
-    warn "сделай вручную: открой http://127.0.0.1:8100, создай API-ключ"
-    warn "и вставь его в $ENV_FILE в строку OPENAI_API_KEY="
-    todo "прописать ключ cptr в openwebui.env"
-  fi
-fi
-
-if docker ps --format '{{.Names}}' | grep -qx open-webui; then
-  have "контейнер уже запущен"
-else
-  ( cd "$RUNTIME/openwebui" && ./run-openwebui.sh ) 2>&1 | sed 's/^/      /'
-  if (( PIPESTATUS[0] != 0 )); then
-    fail "Open WebUI не запустился — смотри вывод выше"
-    exit 1
-  fi
-  ok "запущен"
-fi
-
-# Ждём, пока контейнер поднимется, и ДОписываем настройки в его базу.
-#
-# Почему в базу, а не только в env: Open WebUI с ENABLE_PERSISTENT_CONFIG=true
-# (значение по умолчанию) хранит провайдеров в своей webui.db и читает env
-# только при ПЕРВОМ старте на пустой базе. Если контейнер уже создавался —
-# например, при повторном запуске скрипта — ключ и адрес из env игнорируются,
-# и в пикере моделей остаётся «No models available».
-have "проверяю настройки в базе Open WebUI"
-
-WEBUI_SETTINGS_RC=0
-for _ in $(seq 1 30); do
-  if docker exec open-webui python -c 'import sqlite3' >/dev/null 2>&1; then
-    WEBUI_SETTINGS_RC=1
-    break
-  fi
-  sleep 2
-done
-
-if (( WEBUI_SETTINGS_RC )); then
-  docker exec -i open-webui python - "$KEY" "$MODEL_NAME" <<'PY' 2>&1 | sed 's/^/      /'
-import json, os, sqlite3, sys
-
-# Ключ передаём аргументом, а если он пуст (создать не удалось) — берём из env
-# контейнера, чтобы не затереть уже рабочее значение пустым.
-key = sys.argv[1] if len(sys.argv) > 1 and sys.argv[1] else os.environ.get("OPENAI_API_KEY", "")
-base = os.environ.get("OPENAI_API_BASE_URL", "http://127.0.0.1:8100/v1")
-MODEL_NAME = sys.argv[2] if len(sys.argv) > 2 and sys.argv[2] else "Opus 5.5"
-
-con = sqlite3.connect("/app/backend/data/webui.db")
-now = __import__("time").time()
-
-rows = {
-    "openai.enable": json.dumps(True),
-    "openai.api_base_urls": json.dumps([base]),
-    "openai.api_keys": json.dumps([key] if key else []),
-    # Заголовки нужны cptr, чтобы связать ветки чата Open WebUI с сессией агента.
-    "openai.api_configs": json.dumps({"0": {
-        "enable": True, "tags": [], "prefix_id": "", "model_ids": [],
-        "connection_type": "local", "auth_type": "bearer",
-        "headers": {
-            "X-OpenWebUI-User-Name": "{{USER_NAME}}",
-            "X-OpenWebUI-User-Id": "{{USER_ID}}",
-            "X-OpenWebUI-User-Email": "{{USER_EMAIL}}",
-            "X-OpenWebUI-Chat-Id": "{{CHAT_ID}}",
-            "X-OpenWebUI-Message-Id": "{{MESSAGE_ID}}",
-            "X-OpenWebUI-Task": "{{TASK}}",
-        },
-    }}),
-}
-
-for k, v in rows.items():
-    con.execute(
-        "INSERT INTO config (key, value, updated_at) VALUES (?, ?, ?) "
-        "ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at",
-        (k, v, now),
-    )
-    print(f"  ✓ {k}")
-
-# Пикер моделей показывает имя workspace'а — «Home - /home/<user>». Это имя
-# папки, а не модели: человеку оно ничего не говорит.
-#
-# Переименовываем на месте: запись в model с тем же id, что и у базовой
-# модели, и base_model_id = NULL. Open WebUI в этом случае НЕ добавляет
-# второй пункт, а подменяет name у существующего (utils/models.py: ветка
-# «Override applied directly to a base model»). С base_model_id = id
-# получился бы дубликат в списке — так делать не надо.
-#
-# Модель, за которой стоит cptr, — единственная в этом списке, поэтому
-# находим её по префиксу, а не по захардкоженному пути: папка у каждого своя.
-model_id = con.execute(
-    "select id from model where id like 'cptr/%' limit 1"
-).fetchone()
-if model_id is None:
-    print("  · модели cptr ещё нет — имя поправим при следующем запуске")
-else:
-    con.execute(
-        "INSERT INTO model (id, user_id, base_model_id, name, params, meta, "
-        "updated_at, created_at, is_active) VALUES (?, ?, NULL, ?, '{}', ?, ?, ?, 1) "
-        "ON CONFLICT(id) DO UPDATE SET name=excluded.name, meta=excluded.meta, "
-        "updated_at=excluded.updated_at",
-        (
-            model_id[0],
-            con.execute("select id from user limit 1").fetchone()[0],
-            MODEL_NAME,
-            json.dumps({"description": "Claude Code agent with full access to your home folder"}),
-            now,
-            now,
-        ),
-    )
-    print(f"  ✓ модель названа: {MODEL_NAME}")
-
-con.commit()
-PY
-
-  # Контейнер держит настройки в памяти — перезапуск, чтобы прочитал новые.
-  docker restart open-webui >/dev/null 2>&1
-  have "контейнер перезапущен с новыми настройками"
-else
-  warn "не удалось заглянуть в базу Open WebUI"
-  todo "проверить настройки Open WebUI вручную (Настройки → Подключения)"
-fi
-
 # ── 8. ярлыки Windows ────────────────────────────────────────────────────────
 
-step "8/10  Ярлыки на рабочем столе Windows"
+step "6/8  Ярлыки на рабочем столе Windows"
 
 # Ярлыки делает PowerShell-скрипт: из WSL виден рабочий стол через /mnt/c,
 # но .lnk — это COM-объект Windows, и собирать его бинарно руками незачем.
@@ -681,7 +356,7 @@ fi
 
 # ── 9. автообновление набора ─────────────────────────────────────────────────
 
-step "9/10  Автообновление"
+step "7/8  Автообновление"
 
 # Набор — надстройка над zim-claude. Когда апстрим обновляется, его install.sh
 # переустанавливает своё и затирает то, что мы положили поверх (конфиг
@@ -772,7 +447,7 @@ fi
 
 # ── 10. PATH и итог ──────────────────────────────────────────────────────────
 
-step "10/10  PATH"
+step "8/8  PATH"
 
 # ~/.local/bin в ~/.bashrc прописывает install.sh; здесь страхуемся на случай,
 # если его запускали с --no-rc.
@@ -795,7 +470,7 @@ fi
 cat <<EOF
 
   Терминал:   zim-claude
-  Чат:        http://127.0.0.1:3000
+  Desktop:    Claude Desktop → Gateway http://127.0.0.1:4002
   Поиск:      zim-memory search "запрос"
   Запуск всего сразу:  ~/start-all.sh
 

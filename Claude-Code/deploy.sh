@@ -2,8 +2,8 @@
 # deploy.sh — раскатать доработки поверх установленного zim-claude.
 #
 # Запускать ПОСЛЕ install.sh из корня репозитория: он ставит CLI и прокси, а
-# этот скрипт добавляет то, чего в нём нет — перехват веб-поиска, zim-memory,
-# настройки Claude Code и конфиги браузерной половины.
+# этот скрипт добавляет то, чего в нём нет — перехват веб-поиска (через
+# локальный SearxNG), zim-memory, настройки Claude Code и статус-строку.
 #
 #   ./deploy.sh              — установить / обновить
 #   ./deploy.sh --dry-run    — показать, что будет сделано
@@ -24,8 +24,8 @@ FILES="$SRC/files"
 # после чего обновления встанут навсегда.
 ZIM_CLAUDE_DIR="${ZIM_CLAUDE_DIR:-$HOME/zim-claude}"
 
-# Сюда складывается всё, что принадлежит этому набору: конфиг Open WebUI,
-# патчи cptr. Отдельно от чекаутов — и апстрима, и нашего.
+# Сюда складывается всё, что принадлежит этому набору: настройки SearxNG и
+# настройки Claude Code. Отдельно от чекаутов — и апстрима, и нашего.
 RUNTIME="${ZIM_CLAUDE_RUNTIME_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/zim-claude}"
 
 TOKENJUICE_DIR="${ZIM_CLAUDE_TOKENJUICE_DIR:-$HOME/tokenjuice}"
@@ -55,58 +55,6 @@ put() {
   ok "${dst/#$HOME/~}"
 }
 
-# put_env <источник> <назначение> — как put, но значения ключей, которые уже
-# есть в файле-назначении, остаются: шаблон их оставляет пустыми, а заполняет
-# их install-stack.sh под конкретную машину.
-#
-# Без этого повторный запуск затирал бы openwebui.env шаблоном: WEBUI_SECRET_KEY
-# и OPENAI_API_KEY снова оказывались пустыми, скрипт генерировал НОВЫЙ секрет
-# сессий (все, кто был в чате, разлогинивались) и создавал в cptr второй ключ
-# при живом первом.
-put_env() {
-  local src="$1" dst="$2" mode="${3:-644}" k
-  if [[ "$DRY" == "1" ]]; then
-    log "обновил бы (ключи сохранил): ${dst/#$HOME/~}"
-    return
-  fi
-  if [[ ! -f "$dst" ]]; then
-    put "$src" "$dst" "$mode"
-    return
-  fi
-  mkdir -p "$(dirname "$dst")"
-
-  # Собираем результат во временный файл и сравниваем с текущим ДО записи.
-  # Без этого каждый запуск создавал бы .bak с ключами, даже когда содержимое
-  # не изменилось, — а deploy.sh теперь гоняется обновлятором каждый час.
-  # Сутки такого «обновления» оставили бы 24 копии секретов на диске.
-  local tmp
-  tmp="$(mktemp "$dst.XXXXXX")" || return 1
-  cp "$src" "$tmp"
-  for k in WEBUI_SECRET_KEY OPENAI_API_KEY; do
-    local have
-    have="$(sed -n "s/^$k=//p" "$dst" | head -1)"
-    [[ -n "$have" ]] || continue
-    python3 -I - "$tmp" "$k" "$have" <<'PY' || true
-import pathlib, re, sys
-path, key, value = pathlib.Path(sys.argv[1]), sys.argv[2], sys.argv[3]
-text = path.read_text()
-text = re.sub(rf'^{re.escape(key)}=.*$', f'{key}={value}', text, flags=re.M)
-path.write_text(text)
-PY
-  done
-  chmod "$mode" "$tmp"
-
-  if cmp -s "$tmp" "$dst"; then
-    rm -f -- "$tmp"
-    skip "уже на месте: ${dst/#$HOME/~}"
-    return
-  fi
-  cp -p "$dst" "$dst.bak-$STAMP"
-  mv -f -- "$tmp" "$dst"
-  chmod "$mode" "$dst"
-  ok "${dst/#$HOME/~} (ключи сохранены)"
-}
-
 # ---------------------------------------------------------------- проверки
 
 [[ -d "$FILES" ]] || { log "нет каталога files/ рядом со скриптом"; exit 1; }
@@ -121,7 +69,9 @@ fi
 
 # ---------------------------------------------------------------- прокси
 
-log "1/4  прокси: веб-поиск и вырезание Anthropic-only полей"
+# Step numbers below are /3, not /4: the browser half (Open WebUI + cptr) was
+# removed once Claude Desktop took over — it talks to the :4002 gateway itself.
+log "1/3  прокси: веб-поиск и вырезание Anthropic-only полей"
 
 # Конфиги читаются из ~/tokenjuice/ — там же, где профиль с ключом. Модель
 # внутри уже new: deepseek-v4.1-flash-1017 под Token Juice.
@@ -142,7 +92,7 @@ put "$FILES/drop_anthropic_only.py" "$TOKENJUICE_DIR/drop_anthropic_only.py"
 
 # ---------------------------------------------------------------- zim-memory
 
-log "2/4  zim-memory: поиск по заметкам и истории сессий"
+log "2/3  zim-memory: поиск по заметкам и истории сессий"
 put "$FILES/zim-memory/index.py"              "$HOME/.claude/zim-memory/index.py"
 put "$FILES/zim-memory/hook-session-start.sh" "$HOME/.claude/zim-memory/hook-session-start.sh" 755
 put "$FILES/zim-memory/zim-memory"            "$HOME/.local/bin/zim-memory" 755
@@ -151,88 +101,10 @@ put "$FILES/zim-memory/zim-memory"            "$HOME/.local/bin/zim-memory" 755
 # быть на месте до того, как хук начнёт работать.
 put "$FILES/zim-deploy-update.sh"             "$HOME/.local/bin/zim-deploy-update.sh" 755
 
-# ---------------------------------------------------------------- переезд
-
-# Раньше эти файлы лежали ВНУТРИ чекаута zim-claude (~/zim-claude/openwebui/,
-# ~/zim-claude/patches/). Теперь они в $RUNTIME, а из чекаута их надо убрать:
-# untracked-файл там — это мина замедленного действия, при появлении такого
-# пути в апстриме fast-forward упадёт с «would be overwritten».
-#
-# Не удаляем, а переносим: в старом openwebui.env лежат РАБОЧИЕ ключи этой
-# машины (сессии Open WebUI и ключ cptr), и потерять их значит разлогинить
-# человека и сломать связь с агентом.
-migrate_legacy() {
-  local legacy_openwebui="$ZIM_CLAUDE_DIR/openwebui"
-  local legacy_patches="$ZIM_CLAUDE_DIR/patches"
-  local legacy_cb="$ZIM_CLAUDE_DIR/claude-desktop-integration/drop_anthropic_only.py"
-  local moved=0 f
-
-  if [[ -f "$legacy_openwebui/openwebui.env" && ! -f "$RUNTIME/openwebui/openwebui.env" ]]; then
-    if [[ "$DRY" == "1" ]]; then
-      log "перенёс бы ключи из ${legacy_openwebui/#$HOME/~} в ${RUNTIME/#$HOME/~}"
-    else
-      mkdir -p "$RUNTIME/openwebui"
-      mv -- "$legacy_openwebui/openwebui.env" "$RUNTIME/openwebui/openwebui.env"
-      chmod 600 -- "$RUNTIME/openwebui/openwebui.env"
-      ok "ключи перенесены из ${legacy_openwebui/#$HOME/~} в ${RUNTIME/#$HOME/~}"
-    fi
-    moved=1
-  fi
-
-  # Остатки прежних раскладок: бэкапы ключей и скрипт запуска.
-  for f in "$legacy_openwebui"/*.bak-* "$legacy_openwebui/run-openwebui.sh"; do
-    [[ -e "$f" ]] || continue
-    if [[ "$DRY" == "1" ]]; then
-      log "убрал бы из чекаута: ${f/#$HOME/~}"
-    else
-      rm -f -- "$f"
-      moved=1
-    fi
-  done
-  for f in "$legacy_patches"/*.patch; do
-    [[ -e "$f" ]] || continue
-    if [[ "$DRY" == "1" ]]; then
-      log "убрал бы из чекаута: ${f/#$HOME/~}"
-    else
-      rm -f -- "$f"
-      moved=1
-    fi
-  done
-  if [[ -f "$legacy_cb" ]]; then
-    if [[ "$DRY" == "1" ]]; then
-      log "убрал бы из чекаута: ${legacy_cb/#$HOME/~}"
-    else
-      rm -f -- "$legacy_cb"
-      moved=1
-    fi
-  fi
-
-  # Пустые каталоги в чужом репозитории тоже не нужны.
-  if [[ "$DRY" == "0" ]]; then
-    rmdir -- "$legacy_openwebui" "$legacy_patches" 2>/dev/null || true
-  fi
-
-  (( moved )) || skip "чекаут zim-claude уже чист"
-}
-
-if [[ -d "$ZIM_CLAUDE_DIR/.git" ]]; then
-  migrate_legacy
-fi
-
-# ---------------------------------------------------------------- прочее
-
-log "3/4  SearxNG, Open WebUI, cptr"
-put "$FILES/searxng-settings.yml"            "$RUNTIME/searxng/settings.yml"
-put_env "$FILES/openwebui/openwebui.env"     "$RUNTIME/openwebui/openwebui.env" 600
-put "$FILES/openwebui/run-openwebui.sh"      "$RUNTIME/openwebui/run-openwebui.sh" 755
-put "$FILES/start-cptr.sh"                   "$HOME/start-cptr.sh" 755
-put "$FILES/start-all.sh"                    "$HOME/start-all.sh" 755
-put "$FILES/cptr-patches/gateway-images.patch"        "$RUNTIME/patches/gateway-images.patch"
-put "$FILES/cptr-patches/config-multiline-toml.patch" "$RUNTIME/patches/config-multiline-toml.patch"
 
 # ---------------------------------------------------------------- Claude Code
 
-log "4/4  настройки Claude Code (права, хук памяти, статус-строка, MCP)"
+log "3/3  настройки Claude Code (права, хук памяти, статус-строка, MCP)"
 
 # Статус-строка: процент занятого контекста. Кладём ДО слияния settings.json —
 # statusLine ссылается на этот файл, и он должен существовать к первому
@@ -268,13 +140,17 @@ if "permissions" in want:
     perms = data.setdefault("permissions", {})
     allow = perms.setdefault("allow", [])
 
-    # Старые версии набора разрешали запуск скрипта по пути ВНУТРИ чекаута
-    # zim-claude. Скрипт переехал в ~/.config/zim-claude, и разрешение на
-    # старый путь больше ничего не открывает — убираем, иначе оно копится
-    # у всех, кто ставил раньше.
-    stale = "Bash(/home/*/zim-claude/openwebui/run-openwebui.sh:*)"
-    if stale in allow:
-        allow.remove(stale)
+    # Разрешения на скрипты браузерной половины (Open WebUI), которые набор
+    # больше не ставит: старый путь внутри чекаута и путь в ~/.config. Ни один
+    # из них теперь ничего не открывает — убираем, чтобы не копились.
+    stale = [
+        "Bash(/home/*/zim-claude/openwebui/run-openwebui.sh:*)",
+        "Bash(/home/*/.config/zim-claude/openwebui/run-openwebui.sh:*)",
+    ]
+    removed = [p for p in stale if p in allow]
+    for p in removed:
+        allow.remove(p)
+    if removed:
         changed.append("устаревшее разрешение")
 
     added = False

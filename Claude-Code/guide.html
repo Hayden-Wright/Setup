@@ -290,9 +290,8 @@
   <header>
     <h1>Zim-стек с нуля</h1>
     <p class="lede">
-      Терминальный Claude Code через локальный прокси и браузерный чат с доступом
-      к машине — на чистой WSL Ubuntu. Надстройка над zim-claude: ставит то,
-      чего в нём нет.
+      Терминальный Claude Code и Claude Desktop через локальный прокси — на
+      чистой WSL Ubuntu. Надстройка над zim-claude: ставит то, чего в нём нет.
     </p>
     <div class="meta">
       <span>WSL2 · Ubuntu · bash</span>
@@ -320,43 +319,19 @@
   <section>
     <h2>Что получится</h2>
     <p>
-      Две независимые половины. Их можно ставить по отдельности: если браузерная
-      часть не нужна — скрипт можно остановить и пропустить её.
+      Одна трасса: обе программы говорят с локальным LiteLLM, тот переводит
+      запросы в DeepSeek. Браузерного чата (Open WebUI + cptr) больше нет —
+      его заменяет Claude Desktop, подключённый к шлюзу на <code>:4002</code>.
     </p>
-    <div class="scroll">
-      <table>
-        <thead>
-          <tr><th>Половина</th><th>Что это</th><th>Шаги</th></tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>терминал</td>
-            <td>
-              <code>zim-claude</code> — обычный Claude Code, но запросы идут не в
-              Anthropic, а в локальный LiteLLM, который переводит их в DeepSeek.
-              Плюс <code>zim-memory</code> — поиск по заметкам и прошлым сессиям.
-            </td>
-            <td class="num">всегда</td>
-          </tr>
-          <tr>
-            <td>браузер</td>
-            <td>
-              Open WebUI как веб-чат и cptr — агент с доступом к диску, которого
-              можно дёргать из браузера. Веб-поиск через локальный SearxNG.
-            </td>
-            <td class="num">по желанию</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
   </section>
 
   <section>
     <h2>Установка</h2>
     <p>
       Один скрипт ставит всё: пакеты, Docker, Claude Code, zim-claude,
-      доработки, SearxNG, cptr и Open WebUI. Ключ Token Juice он спросит,
-      а ключ доступа Open WebUI к агенту сгенерирует сам.
+      доработки и SearxNG (движок для веб-поиска в обоих приложениях). Ключ
+      Token Juice он спросит. Claude Desktop ставится с сайта Anthropic и
+      подключается к шлюзу <code>http://127.0.0.1:4002</code> один раз.
     </p>
 
     <div class="step">
@@ -424,24 +399,6 @@ cd zim-setup</code></pre></div>
     <div class="step">
       <div class="rail">04</div>
       <div class="body">
-        <h3>Зарегистрироваться в cptr <span class="chip">браузер</span></h3>
-        <p>
-          Единственный шаг, который нельзя автоматизировать. Скрипт сам
-          напечатает ссылку с одноразовым токеном — открой её и придумай логин
-          с паролем.
-        </p>
-        <p class="note">
-          Логин и пароль локальные: это вход в программу на своём компьютере,
-          никуда они не отправляются. После регистрации запусти
-          <code>./install-stack.sh</code> ещё раз — скрипт доделает остальное:
-          настроит агента и поднимет Open WebUI.
-        </p>
-      </div>
-    </div>
-
-    <div class="step">
-      <div class="rail">05</div>
-      <div class="body">
         <h3>Готово <span class="chip">WSL</span></h3>
         <p>Проверить, что всё живо:</p>
         <div class="cmd"><button class="copy" type="button">копировать</button><pre><code>zim-claude</code></pre></div>
@@ -452,7 +409,7 @@ cd zim-setup</code></pre></div>
           <table>
             <tbody>
               <tr><td>zim-claude</td><td>терминальный Claude Code</td></tr>
-              <tr><td>127.0.0.1:3000</td><td>чат в браузере</td></tr>
+              <tr><td>Claude Desktop</td><td>Gateway → http://127.0.0.1:4002, ключ sk-claude-desktop-local</td></tr>
               <tr><td>zim-memory search "…"</td><td>поиск по заметкам и истории</td></tr>
               <tr><td>~/start-all.sh</td><td>поднять всё сразу после перезагрузки</td></tr>
             </tbody>
@@ -471,19 +428,15 @@ cd zim-setup</code></pre></div>
         </thead>
         <tbody>
           <tr><td>4000</td><td>LiteLLM для CLI</td><td>локально</td></tr>
-          <tr><td>4002</td><td>LiteLLM для Claude Desktop и агента cptr</td><td>локально</td></tr>
-          <tr><td>8100</td><td>cptr — веб-интерфейс агента</td><td>только 127.0.0.1</td></tr>
+          <tr><td>4002</td><td>LiteLLM-шлюз для Claude Desktop</td><td>локально</td></tr>
           <tr><td>8888</td><td>SearxNG</td><td>только 127.0.0.1</td></tr>
-          <tr><td>3000</td><td>Open WebUI</td><td>все интерфейсы</td></tr>
         </tbody>
       </table>
     </div>
     <p class="note">
-      Порт 3000 исключение: контейнер запущен с <code>--network host</code>,
-      поэтому если WSL пробрасывает порты на Windows, чат виден любому в
-      локальной сети. Закрыть можно, но тогда Open WebUI не достучится до
-      SearxNG и cptr по <code>127.0.0.1</code> — понадобятся другие адреса,
-      так что просто поменять флаг нельзя.
+      Оба прокси слушают на всех интерфейсах, чтобы до них доставалось
+      приложение на Windows. Ключ у шлюза <code>:4002</code> статический, так
+      что порт стоит держать закрытым извне — это внутренняя машина.
     </p>
   </section>
 
@@ -491,20 +444,8 @@ cd zim-setup</code></pre></div>
     <h2>Что может сломаться</h2>
     <ul>
       <li>
-        <strong>Обновление cptr затирает патчи.</strong> После
-        <code>pip install -U cptr</code> повтори команды <code>patch</code> из
-        установщика. Версия 0.9.21 зафиксирована именно поэтому.
-      </li>
-      <li>
-        <strong>Веб-поиск молча деградирует</strong> до коротких сниппетов, если
-        в контейнере Open WebUI нет <code>ENABLE_LOCAL_WEB_FETCH</code>. Поэтому
-        контейнер поднимается только через <code>run-openwebui.sh</code>, а не
-        руками.
-      </li>
-      <li>
-        <strong>Чаты без названий и без follow-up кнопок.</strong> Известная
-        нерешённая проблема: cptr отвечает <code>503</code> на служебные задачи
-        вроде генерации заголовка. Основной чат при этом работает.
+        <strong>Веб-поиск отвечает ошибкой.</strong> Не поднят SearxNG:
+        <code>docker start searxng</code> либо <code>~/start-all.sh</code>.
       </li>
       <li>
         <strong>Имя модели обманчиво.</strong> <code>claude-opus-5-5</code> — это
@@ -512,8 +453,9 @@ cd zim-setup</code></pre></div>
         только потому, что иначе отказывается показывать не-Anthropic модели.
       </li>
       <li>
-        <strong>Окно контекста 262144, а не миллион.</strong> Столько режет
-        апстрим; значение прописано и в env-профиле CLI, и в конфиге cptr.
+        <strong>Окно контекста у Token Juice 262144, а не миллион.</strong>
+        Столько режет апстрим. В Claude Desktop и в CLI окно берётся из
+        <code>GET /v1/models</code>, отдельно его прописывать не нужно.
         Менять его на большее смысла нет — запрос упадёт на стороне апстрима.
       </li>
     </ul>
