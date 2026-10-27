@@ -79,8 +79,6 @@ model_list:
     model_info:
       max_input_tokens: 1048576
       max_output_tokens: 65536
-    model_info:
-      max_input_tokens: 1048576
 
   - model_name: claude-opus-5-5-logfare-pro
     litellm_params:
@@ -91,8 +89,6 @@ model_list:
     model_info:
       max_input_tokens: 1048576
       max_output_tokens: 65536
-    model_info:
-      max_input_tokens: 1048576
 
   - model_name: claude-opus-5-5-glm
     litellm_params:
@@ -103,8 +99,6 @@ model_list:
     model_info:
       max_input_tokens: 262144
       max_output_tokens: 65536
-    model_info:
-      max_input_tokens: 262144
 
   - model_name: claude-opus-5-5-kimi
     litellm_params:
@@ -115,8 +109,6 @@ model_list:
     model_info:
       max_input_tokens: 262144
       max_output_tokens: 65536
-    model_info:
-      max_input_tokens: 262144
 
   # --- Optional extra tiers -------------------------------------------------
   # Token Juice serves exactly one chat model, so every tier is an alias onto
