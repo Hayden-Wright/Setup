@@ -2,69 +2,102 @@
 #
 #   Claude Code (Anthropic /v1/messages) --▶ LiteLLM :4000 --▶ Token Juice (OpenAI)
 #
-# This is the deployed copy: deploy.sh writes it to
-# ~/tokenjuice/litellm-config.yaml. It is the same file the CLI proxy reads.
+# This file is a STARTING POINT, not the source of truth. The live copy lives
+# in ~/tokenjuice/ next to the credential profile, and install.sh only writes
+# it when it is not already there — an existing ~/tokenjuice/litellm-config.yaml
+# is the user's own model-name configuration and is never overwritten.
 #
 #   config dir   ${ZIM_CLAUDE_TOKENJUICE_DIR:-$HOME/tokenjuice}
 #   this file    <config dir>/litellm-config.yaml
 #   profile      <config dir>/source
 #
-# The alias and the upstream id must agree with ANTHROPIC_MODEL in the profile:
-# Token Juice rotates the snapshot suffix, and a stale one fails as a bare
-# 404 "Model not found". Re-read the live catalog before changing it:
+# Token Juice serves exactly one chat model. Its upstream id carries a snapshot
+# suffix that Token Juice rotates, and naming a suffix that no longer exists
+# fails as a 404 "Model not found" rather than anything helpful. Re-read the
+# live catalog before changing the name below:
 #
 #   curl -s https://api.tokenjuice.ai/v1/models -H "Authorization: Bearer $ANTHROPIC_AUTH_TOKEN"
 
+general_settings:
+  # Required since litellm 1.104: without a master key the proxy refuses to
+  # start, because it would otherwise accept every request with no
+  # authentication. This proxy is a local translation shim in front of Token
+  # Juice, not a multi-tenant gateway, so the profile's own upstream token
+  # doubles as the proxy credential — zim-claude already sends it as the bearer
+  # token, so the request that worked before keeps working, while anything else
+  # on the box that finds the port is rejected.
+  master_key: os.environ/ANTHROPIC_AUTH_TOKEN
+
 model_list:
+  # The alias is what zim-claude (and anything else speaking Anthropic's
+  # protocol) asks for; the `model:` line is what Token Juice is actually
+  # called upstream.
   - model_name: deepseek-v4.1-flash-1017
     litellm_params:
       model: openai/deepseek-ai/DeepSeek-V4.1-Flash-1017
       api_base: https://api.tokenjuice.ai/v1
       api_key: os.environ/ANTHROPIC_AUTH_TOKEN
+      drop_params: true
+    # Upstream limits come from the catalogs, not from guesses:
+    #   curl -s https://api.tokenjuice.ai/v1/models   -> context_window
+    #   curl -s https://logfare.ai/v1/models          -> context_length
+    # model_info sits on the ENTRY (sibling of litellm_params); inside
+    # litellm_params LiteLLM ignores it and /v1/models reports a made-up size.
+    model_info:
+      max_input_tokens: 262144
+      max_output_tokens: 65536
 
-# --- Веб-поиск -------------------------------------------------------------
-# Апстрим (Token Juice → DeepSeek) не поддерживает серверный веб-поиск:
-# Claude Code шлёт инструмент web_search_20250305, LiteLLM конвертирует его
-# в OpenAI-формат web_search_preview, и апстрим отвечает
-#   400 "Unsupported Responses tools type 'web_search_preview'".
-#
-# Лечится перехватом: LiteLLM сам вырезает этот инструмент, выполняет поиск
-# через search_tools ниже и возвращает модели готовые результаты. Апстрим
-# неподдерживаемый инструмент вообще не видит.
-#
-# enabled_providers обязателен: по умолчанию перехват включён только для
-# bedrock, а у нас провайдер openai (см. model выше) — без этой строки
-# перехват молча пропускает запрос и 400 возвращается.
-#
-# SearxNG поднят локально в докере (контейнер `searxng`, порт 8888),
-# ключи не нужны. Конфиг: ~/.config/zim-claude/searxng/settings.yml
-search_tools:
-  - search_tool_name: local-searxng
-    litellm_params:
-      search_provider: searxng
-      api_base: http://127.0.0.1:8888
-
-litellm_settings:
-  # Порядок важен: сначала `drop_anthropic_only` вырезает Anthropic-only поля
-  # (`thinking` и др.), которые апстрим отвергает с 400, и только потом
-  # отрабатывает перехват веб-поиска.
+  # --- Logfare (second upstream) ---
+  # Logfare — the second upstream, on the same proxy. Logfare serves the
+  # Anthropic Messages API natively, so `anthropic/...` passes through with no
+  # translation. The key is read from ~/.config/zim-claude/logfare by
+  # start-litellm.sh and exported as LOGFARE_API_KEY; without one these entries
+  # fail on use while the Token Juice route keeps working.
   #
-  # Причина: Claude Code >= 2.1.169 всегда шлёт
-  #     thinking: {"type": "adaptive", "display": "omitted"}
-  # а модель зарегистрирована как `openai/...`, которого нет в карте моделей
-  # LiteLLM, — поэтому поле уходит в OpenAI-апстрим как есть и получает
-  #     400 {"message":"Invalid request","type":"Bad Request"}
-  # `drop_params: true` тут не помогает: он выкидывает лишь то, что LiteLLM
-  # уже опознал как чужое. Подробности — в drop_anthropic_only.py
-  callbacks: ["drop_anthropic_only.proxy_handler_instance", "websearch_interception"]
-  websearch_interception_params:
-    search_tool_name: local-searxng
-    enabled_providers: ["openai"]
+  # Claude Code >= 2.1.169 sends thinking:{"type":"adaptive"}, which Logfare
+  # forwards to an upstream that answers 400 Upstream request failed (measured:
+  # the same request without that field returns 200). On this route the
+  # supported switch is CLAUDE_CODE_DISABLE_THINKING=1, which zim-claude sets.
+  # Only the models listed here can be picked from the proxy. Claude Code's
+  # own tier names (/model opus, sonnet, haiku) are pointed at the chosen
+  # model by zim-claude at start, so no claude-* aliases are needed here —
+  # unlike the Claude Desktop config, whose picker drops every other name.
+  - model_name: logfare/deepseek-v4.1-flash-1017
+    litellm_params:
+      model: anthropic/deepseek-v4.1-flash-1017
+      api_base: https://logfare.ai
+      api_key: os.environ/LOGFARE_API_KEY
+      drop_params: true
+    model_info:
+      max_input_tokens: 1048576
+      max_output_tokens: 65536
 
-general_settings:
-  # Required since litellm 1.104: without a master key the proxy refuses to
-  # start. The profile's own upstream token doubles as the proxy credential —
-  # zim-claude already sends it as the bearer token, so the request that worked
-  # before keeps working, while anything else on the box that finds the port is
-  # rejected.
-  master_key: os.environ/ANTHROPIC_AUTH_TOKEN
+  - model_name: logfare/deepseek-v4-pro-0813
+    litellm_params:
+      model: anthropic/deepseek-v4-pro-0813
+      api_base: https://logfare.ai
+      api_key: os.environ/LOGFARE_API_KEY
+      drop_params: true
+    model_info:
+      max_input_tokens: 1048576
+      max_output_tokens: 65536
+
+  - model_name: logfare/glm-5.3
+    litellm_params:
+      model: anthropic/glm-5.3
+      api_base: https://logfare.ai
+      api_key: os.environ/LOGFARE_API_KEY
+      drop_params: true
+    model_info:
+      max_input_tokens: 262144
+      max_output_tokens: 65536
+
+  - model_name: logfare/kimi-k2.6
+    litellm_params:
+      model: anthropic/kimi-k2.6
+      api_base: https://logfare.ai
+      api_key: os.environ/LOGFARE_API_KEY
+      drop_params: true
+    model_info:
+      max_input_tokens: 262144
+      max_output_tokens: 65536
