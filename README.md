@@ -5,7 +5,6 @@
 - 🐧 [WSL](WSL)
 - 📦 [Программы](Programs)
 - ⚙️ [Конфиги](Configs)
-- 🤖 [Claude Code](Claude-Code)
 - 🖼 [Обои](Wallpapers)
 
 Это не гайды и не сборник инструкций — просто сложенное в одном месте, чтобы
@@ -20,14 +19,12 @@
 | 🐧 WSL | Linux внутри Windows |
 | 📦 Программы | Полезности |
 | ⚙️ Конфиги | Ого настройки |
-| 🤖 Claude Code | Claude Code через локальный прокси: терминал и браузер |
 | 🖼 Обои | Прикинь |
 
 ## Установка одной командой
 
 Для конфигов есть установщики: скачивают настройки из репозитория, ставят
-зависимости и делают бэкап того, что было. Windows-скрипты — в PowerShell,
-Claude Code — в WSL.
+зависимости и делают бэкап того, что было. Оба — в PowerShell, Windows.
 
 **Windows Terminal** — тема Catppuccin Mocha, шрифт JetBrainsMono Nerd Font,
 Fastfetch с ASCII-артом при запуске. Ставит Terminal, шрифт и Fastfetch через
@@ -44,31 +41,16 @@ Set-ExecutionPolicy Bypass -Scope Process -Force; irm "https://raw.githubusercon
 Set-ExecutionPolicy Bypass -Scope Process -Force; irm "https://raw.githubusercontent.com/Hayden-Wright/Setup/main/Configs/Sublime-Text/install.ps1" -OutFile $env:TEMP\sublime-setup.ps1; & $env:TEMP\sublime-setup.ps1
 ```
 
-**Claude Code** — терминальный Claude Code и чат в браузере с доступом к
-машине. Надстройка над [zim-claude](https://github.com/Mr-Destroyer/zim-claude):
-ставит пакеты, Docker, cptr, Open WebUI и ярлыки на рабочем столе. Ключ Token
-Juice спросит при установке. Запускать в WSL Ubuntu.
-
-```bash
-cd ~
-curl -fsSL https://github.com/Hayden-Wright/Setup/archive/refs/heads/main.tar.gz \
-  | tar xz --strip-components=2 --one-top-level=zim-setup Setup-main/Claude-Code
-cd zim-setup
-./install-stack.sh
-```
-
-**Агенты** — окружение для Claude Code в WSL: Node, uv, Python-библиотеки,
-плагины, MCP-серверы и `CLAUDE.md` с правилами для агента. Без sudo, всё в
-`$HOME`. Отдельно описаны инструменты для реверс-инжиниринга (gdb, radare2,
-Ghidra) — они требуют пароля.
-
-```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/Hayden-Wright/Setup/main/Configs/Agents/install.sh)
-```
-
-Все скрипты можно запускать повторно — они обновляют настройки, а прежние
+Оба установщика можно запускать повторно — они обновляют настройки, а прежние
 сохраняют рядом с меткой времени. Подробности и разбор ошибок — в README
 соответствующего раздела.
+
+## Агент
+
+**[deploychan](Configs/Agents)** — MCP-каталог знаний, скиллов и маршрутов
+прокачки для кодинг-агента. Бесплатно, без ключей, ставить нечего: открой
+[mcp.deploychan.webcam](https://mcp.deploychan.webcam) в агентной сессии и
+скажи «подключи» — остальное агент сделает сам.
 
 ## Если скрипты не запускаются
 
@@ -90,7 +72,4 @@ Set-ExecutionPolicy Bypass -Scope Process -Force
 
 `irm` не распознан — значит, открыта старая командная строка (`cmd.exe`)
 вместо PowerShell. Win+X → «Терминал».
-
-`curl` или `tar` не найден при установке Claude Code — значит, команда
-запущена в PowerShell, а не в WSL Ubuntu.
 
