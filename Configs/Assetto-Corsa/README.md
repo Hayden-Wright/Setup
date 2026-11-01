@@ -1,4 +1,4 @@
-| Где | Что |
+| Сайт | Что |
 |---|---|
 | **[AssettoLab](https://assettolab.ru/)** | CSP, Pure, apps, graphics |
 | **[Mods Palace](https://modspalace.carcitysharing.workers.dev/assetto-corsa/mods)** | apps, graphics (много платных плагинов) |
