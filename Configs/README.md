@@ -4,4 +4,4 @@
 - <img src="https://www.google.com/s2/favicons?domain=sublimetext.com&sz=64" width="16"> **[Sublime Text](Sublime-Text)** — тема Aura, шрифт Consolas, подсветка Markdown
 - <img src="https://a.fsdn.com/allura/p/peace-equalizer-apo-extension/icon" width="16"> **[Эквалайзер](Equalizer)** — Пресеты для Equalizer APO + Peace
 - <img src="Agents/deploy-tan.png" width="16"> **[deploychan](Agents)** — MCP-каталог знаний и скиллов для агента, подключается одной ссылкой
-- <img src="https://www.google.com/s2/favicons?domain=assettocorsa.net&sz=64" width="16"> **[Assetto Corsa](Assetto-Corsa)** — графика (CDImagine), камера KirbyCam, HUD без часов
+- <img src="https://www.google.com/s2/favicons?domain=assettocorsa.net&sz=64" width="16"> **[Assetto Corsa](Assetto-Corsa)** — графика CDImagine, камера KirbyCam, HUD без часов и стрелок

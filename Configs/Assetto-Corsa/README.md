@@ -1,7 +1,7 @@
 | Где | Что |
 |---|---|
-| **[AssettoLab](https://assettolab.ru/)** | Моды · Apps · графика |
-| **[Mods Palace](https://modspalace.carcitysharing.workers.dev/assetto-corsa/mods)** | Моды · Apps · графика |
+| **[AssettoLab](https://assettolab.ru/)** | CSP, Pure, apps, graphics |
+| **[Mods Palace](https://modspalace.carcitysharing.workers.dev/assetto-corsa/mods)** | apps, graphics (много платных плагинов) |
 
 ## 🖼 Графика — CDImagine
 
@@ -55,6 +55,23 @@ RACE_VISIBLE=0
 
 `PRATICE` — так ключ назван в самой игре, опечатка не моя. Готовый
 [`session_info.ini`](session_info.ini) можно просто заменить.
+
+## 🚗 Убрать красные стрелки
+
+Красные стрелки по краям экрана — индикатор машин рядом (proximity indicator).
+Файл:
+
+```text
+...\assettocorsa\system\cfg\proximity_indicator.ini
+```
+
+```ini
+[SETTINGS]
+HIDE=1
+```
+
+`HIDE=1` — стрелки скрыты, `HIDE=0` — показываются. Готовый
+[`proximity_indicator.ini`](proximity_indicator.ini) можно просто заменить.
 
 ## 🚀 Чек-лист настройки AC
 
