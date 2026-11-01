@@ -73,10 +73,9 @@ HIDE=1
 `HIDE=1` — стрелки скрыты, `HIDE=0` — показываются. Готовый
 [`proximity_indicator.ini`](proximity_indicator.ini) можно просто заменить.
 
-## 🎮 Advanced Gamepad Assist
+## <img src="aga-icon.png" width="22"> Advanced Gamepad Assist
 
-**[Скачать — официальный релиз](https://www.overtake.gg/downloads/advanced-gamepad-assist.62485/)** ·
-**[GitHub](https://github.com/adam10603/AC-Advanced-Gamepad-Assist/releases)**
+**[Скачать](https://github.com/adam10603/AC-Advanced-Gamepad-Assist/releases)**
 
 Gamepad FX скрипт для CSP. Ставится копированием папок `apps` и `extension` в
 корень `assettocorsa`, включается в CM → Settings → Custom Shaders Patch →
@@ -84,7 +83,6 @@ Gamepad FX.
 
 | Параметр | Значение |
 |---|---|
-| Enable Advanced Gamepad Assist | включено |
 | **Steering input** | |
 | Steering rate | 40% |
 | Steering rate at speed | +5% |
