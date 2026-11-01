@@ -5,11 +5,11 @@
 
 ## <img src="Content-Manager/icon.png" width="22"> Content Manager
 
-| Настройки | Пресет |
-|---|---|
-| CSP | **[Открыть](https://acstuff.ru/s/PAO3)** |
-| Video | **[Открыть](https://acstuff.ru/s/2Pf)** |
-| Controls | **[Открыть](https://acstuff.ru/s/LD6a)** |
+<table>
+<tr><td>CSP</td><td><a href="https://acstuff.ru/s/PAO3"><b>Пресет</b></a></td></tr>
+<tr><td>Video</td><td><a href="https://acstuff.ru/s/2Pf"><b>Пресет</b></a></td></tr>
+<tr><td>Controls</td><td><a href="https://acstuff.ru/s/LD6a"><b>Пресет</b></a></td></tr>
+</table>
 
 ## 🖼 Графика — CDImagine
 
