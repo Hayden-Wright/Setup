@@ -60,16 +60,6 @@ Gamepad FX.
 | Max angle | 90.0° |
 | Damping | 50% |
 
-## 🚀 Чек-лист настройки AC
-
-1. **Assetto Corsa** — запустить 1 раз
-2. **Content Manager**
-3. **CSP**
-4. **Pure**
-5. **Hotfix** — если есть
-6. **Advanced Gamepad Assist**
-7. **Графика** → **Apps**
-
 ## 🕒 Убрать время / часы
 
 Файл:
@@ -103,3 +93,13 @@ HIDE=1
 
 `HIDE=1` — стрелки скрыты, `HIDE=0` — показываются. Готовый
 [`proximity_indicator.ini`](proximity_indicator.ini) можно просто заменить.
+
+## 🚀 Чек-лист настройки AC
+
+1. **Assetto Corsa** — запустить 1 раз
+2. **Content Manager**
+3. **CSP**
+4. **Pure**
+5. **Hotfix** — если есть
+6. **Advanced Gamepad Assist**
+7. **Графика** → **Apps**
