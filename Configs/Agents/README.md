@@ -116,3 +116,37 @@ claude mcp remove deploychan
 - [mcp.deploychan.webcam](https://mcp.deploychan.webcam) — сайт
 - [документация](https://mcp.deploychan.webcam/docs.html) — сниппеты, каталог, FAQ
 - [howdeploy/deploychan_mcp](https://github.com/howdeploy/deploychan_mcp) — сервер, сайт и база, MIT
+
+## Моя конфигурация OpenCode
+
+Файлы рядом с этим README:
+
+| Файл | Что внутри |
+|---|---|
+| [`AGENTS.md`](AGENTS.md) | глобальные инструкции агента: язык ответа, терминология, когда искать, честность, формат ответа |
+| [`opencode.json`](opencode.json) | MCP-серверы, провайдеры и лимиты моделей, сжатие контекста |
+
+Кладутся в `~/.config/opencode/` (Windows — `%USERPROFILE%\.config\opencode\`).
+
+### MCP
+
+| Сервер | Что даёт | URL |
+|---|---|---|
+| `deploychan` | каталог знаний, скиллов и маршрутов (раздел выше) | `https://mcp.deploychan.webcam/mcp` |
+| `context7` | актуальная документация библиотек | `https://mcp.context7.com/mcp` |
+
+Оба — remote, транспорт streamable HTTP, авторизация не нужна.
+
+### Скиллы
+
+Своих файлов скиллов нет — работают встроенные, они уже идут с OpenCode:
+`browser` (браузер в приложении), `opencode` (вопросы про сам OpenCode),
+`report` (issue в репозиторий OpenCode). Скиллы из каталога deploychan
+(`list_skills` → `get_skill`) живут на сервере и локально не хранятся.
+
+### Ключи
+
+В `opencode.json` ключей нет: `apiKey` подставляется из переменных окружения —
+`{env:LOGFARE_API_KEY}` и `{env:TOKENJUICE_API_KEY}`. Перед публикацией конфига
+ключи вырезаны, в репозиторий они не попадают.
+
