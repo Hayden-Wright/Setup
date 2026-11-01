@@ -17,7 +17,7 @@
 
 <img src="Graphics/demo-2.png" width="100%">
 
-### Настройка CDImagine
+### Настройка CDImagine ppfilter
 
 <table>
 <tr>
