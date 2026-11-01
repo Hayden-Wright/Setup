@@ -39,6 +39,37 @@
 Готовый файл — [`kirbycam/camera.lua`](kirbycam/camera.lua). В нём
 `OPT_baseFOV = 85`, `OPT_dynamicFOV = false`.
 
+## <img src="aga-icon.png" width="22"> Advanced Gamepad Assist
+
+**[Скачать](https://github.com/adam10603/AC-Advanced-Gamepad-Assist/releases)**
+
+Gamepad FX скрипт для CSP. Ставится копированием папок `apps` и `extension` в
+корень `assettocorsa`, включается в CM → Settings → Custom Shaders Patch →
+Gamepad FX.
+
+| Параметр | Значение |
+|---|---|
+| **Steering input** | |
+| Steering rate | 40% |
+| Steering rate at speed | +5% |
+| Target slip angle | 94.1% |
+| Countersteer response | 18% |
+| Dynamic steering limit | 10% |
+| **Self-steer force** | |
+| Response | 65% |
+| Max angle | 90.0° |
+| Damping | 50% |
+
+## 🚀 Чек-лист настройки AC
+
+1. **Assetto Corsa** — запустить 1 раз
+2. **Content Manager**
+3. **CSP**
+4. **Pure**
+5. **Hotfix** — если есть
+6. **Advanced Gamepad Assist**
+7. **Графика** → **Apps**
+
 ## 🕒 Убрать время / часы
 
 Файл:
@@ -72,34 +103,3 @@ HIDE=1
 
 `HIDE=1` — стрелки скрыты, `HIDE=0` — показываются. Готовый
 [`proximity_indicator.ini`](proximity_indicator.ini) можно просто заменить.
-
-## <img src="aga-icon.png" width="22"> Advanced Gamepad Assist
-
-**[Скачать](https://github.com/adam10603/AC-Advanced-Gamepad-Assist/releases)**
-
-Gamepad FX скрипт для CSP. Ставится копированием папок `apps` и `extension` в
-корень `assettocorsa`, включается в CM → Settings → Custom Shaders Patch →
-Gamepad FX.
-
-| Параметр | Значение |
-|---|---|
-| **Steering input** | |
-| Steering rate | 40% |
-| Steering rate at speed | +5% |
-| Target slip angle | 94.1% |
-| Countersteer response | 18% |
-| Dynamic steering limit | 10% |
-| **Self-steer force** | |
-| Response | 65% |
-| Max angle | 90.0° |
-| Damping | 50% |
-
-## 🚀 Чек-лист настройки AC
-
-1. **Assetto Corsa** — запустить 1 раз
-2. **Content Manager**
-3. **CSP**
-4. **Pure**
-5. **Hotfix** — если есть
-6. **Advanced Gamepad Assist**
-7. **Графика** → **Apps**
