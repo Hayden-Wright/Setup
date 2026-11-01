@@ -60,6 +60,15 @@ Gamepad FX.
 | Max angle | 90.0° |
 | Damping | 50% |
 
+## ⚙️ Content Manager
+
+Пресеты настроек CM. Ссылка отдаёт `acmanager://shared?id=...` — Content Manager
+подхватывает её сам и предлагает импорт.
+
+- **[CSP](https://acstuff.club/s/PAO3)**
+- **[Video](https://acstuff.club/s/2Pf)**
+- **[Controls](https://acstuff.club/s/LD6a)**
+
 ## 🕒 Убрать время / часы
 
 Файл:
