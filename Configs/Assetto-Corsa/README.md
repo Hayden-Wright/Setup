@@ -5,23 +5,20 @@
 
 ## 🖼 Графика — CDImagine
 
-<table>
-<tr>
-<td><img src="demo-1.png" width="420"></td>
-<td><img src="demo-2.png" width="420"></td>
-</tr>
-</table>
+<img src="demo-1.png" width="100%">
+
+<img src="demo-2.png" width="100%">
 
 ### Настройки
 
 <table>
 <tr>
-<td><img src="settings-light-1.jpg" width="400"></td>
-<td><img src="settings-light-2.jpg" width="400"></td>
+<td><img src="settings-light-1.jpg" width="420"></td>
+<td><img src="settings-light-2.jpg" width="420"></td>
 </tr>
 <tr>
-<td><img src="settings-clouds.jpg" width="400"></td>
-<td><img src="settings-glare.jpg" width="400"></td>
+<td><img src="settings-clouds.jpg" width="420"></td>
+<td><img src="settings-glare.jpg" width="420"></td>
 </tr>
 </table>
 
