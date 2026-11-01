@@ -3,13 +3,21 @@
 | **[AssettoLab](https://assettolab.ru/)** | CSP, Pure, apps, graphics |
 | **[Mods Palace](https://modspalace.carcitysharing.workers.dev/assetto-corsa/mods)** | apps, graphics (много платных плагинов) |
 
+## <img src="Content-Manager/icon.png" width="22"> Content Manager
+
+| Настройки | Пресет |
+|---|---|
+| CSP | **[Открыть](https://acstuff.ru/s/PAO3)** |
+| Video | **[Открыть](https://acstuff.ru/s/2Pf)** |
+| Controls | **[Открыть](https://acstuff.ru/s/LD6a)** |
+
 ## 🖼 Графика — CDImagine
 
 <img src="Graphics/demo-1.png" width="100%">
 
 <img src="Graphics/demo-2.png" width="100%">
 
-### Настройки
+### Настройка CDImagine
 
 <table>
 <tr>
@@ -59,14 +67,6 @@ Gamepad FX.
 | Response | 65% |
 | Max angle | 90.0° |
 | Damping | 50% |
-
-## <img src="Content-Manager/icon.png" width="22"> Content Manager
-
-| Настройки | Пресет |
-|---|---|
-| CSP | **[Открыть](https://acstuff.ru/s/PAO3)** |
-| Video | **[Открыть](https://acstuff.ru/s/2Pf)** |
-| Controls | **[Открыть](https://acstuff.ru/s/LD6a)** |
 
 ## 🕒 Убрать время / часы
 
