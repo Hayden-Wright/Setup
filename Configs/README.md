@@ -15,4 +15,4 @@
 
 ### Агент
 
-- <img src="Agents/deploy-tan.png" width="16"> **[MCP/Skills etc](Agents)** — MCP-серверы, скиллы и конфиг агента
+- <img src="Agents/deploy-tan.png" width="16"> **[MCP/Skills etc](Agents)** — MCP-серверы, скиллы и правила агента
