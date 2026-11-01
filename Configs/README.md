@@ -15,4 +15,4 @@
 
 ### Агент
 
-- <img src="Agents/deploy-tan.png" width="16"> **[deploychan](Agents)** — MCP-каталог знаний и скиллов для агента + мои `AGENTS.md` и `opencode.json`
+- <img src="Agents/deploy-tan.png" width="16"> **[MCP/Skills etc](Agents)** — MCP-серверы, скиллы и конфиг агента
