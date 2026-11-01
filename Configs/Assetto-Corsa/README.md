@@ -5,20 +5,20 @@
 
 ## 🖼 Графика — CDImagine
 
-<img src="demo-1.png" width="100%">
+<img src="Graphics/demo-1.png" width="100%">
 
-<img src="demo-2.png" width="100%">
+<img src="Graphics/demo-2.png" width="100%">
 
 ### Настройки
 
 <table>
 <tr>
-<td><img src="settings-light-1.jpg" width="420"></td>
-<td><img src="settings-light-2.jpg" width="420"></td>
+<td><img src="Graphics/settings-light-1.jpg" width="420"></td>
+<td><img src="Graphics/settings-light-2.jpg" width="420"></td>
 </tr>
 <tr>
-<td><img src="settings-clouds.jpg" width="420"></td>
-<td><img src="settings-glare.jpg" width="420"></td>
+<td><img src="Graphics/settings-clouds.jpg" width="420"></td>
+<td><img src="Graphics/settings-glare.jpg" width="420"></td>
 </tr>
 </table>
 
@@ -28,7 +28,7 @@
 
 Конфиг — 85 FOV, NoShaking.
 
-<img src="kirbycam-demo.png" width="720">
+<img src="KirbyCam/demo.png" width="720">
 
 Заменить `camera.lua`:
 
@@ -36,10 +36,10 @@
 ...\assettocorsa\extension\lua\chaser-camera\kirbycam\camera.lua
 ```
 
-Готовый файл — [`kirbycam/camera.lua`](kirbycam/camera.lua). В нём
+Готовый файл — [`KirbyCam/camera.lua`](KirbyCam/camera.lua). В нём
 `OPT_baseFOV = 85`, `OPT_dynamicFOV = false`.
 
-## <img src="aga-icon.png" width="22"> Advanced Gamepad Assist
+## <img src="Gamepad-Assist/icon.png" width="22"> Advanced Gamepad Assist
 
 **[Скачать](https://github.com/adam10603/AC-Advanced-Gamepad-Assist/releases)**
 
